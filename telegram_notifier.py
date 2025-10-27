@@ -92,8 +92,13 @@ def update_notification_stats():
 def format_oracle_update_message(indexers_data, activity_log):
     """Format the oracle update notification message."""
     metadata = indexers_data.get("metadata", {})
-    last_check = metadata.get("last_check", "Unknown")
-    last_oracle_update = metadata.get("last_oracle_update_time", "Unknown")
+    last_oracle_update_time = metadata.get("last_oracle_update_time")
+    
+    # Convert Unix timestamp to readable format
+    if last_oracle_update_time and isinstance(last_oracle_update_time, (int, float)):
+        update_time = datetime.fromtimestamp(last_oracle_update_time).strftime('%Y-%m-%d %H:%M:%S UTC')
+    else:
+        update_time = "Unknown"
     
     indexers = indexers_data.get("indexers", [])
     total_indexers = len(indexers)
@@ -108,8 +113,7 @@ def format_oracle_update_message(indexers_data, activity_log):
     # Build message
     message = "🔔 **Oracle Update Detected!**\n"
     message += "━━━━━━━━━━━━━━━━━━━\n"
-    message += f"**Update Time:** {last_check}\n"
-    message += f"**Oracle Timestamp:** {last_oracle_update}\n\n"
+    message += f"**Update Time:** {update_time}\n\n"
     
     message += "📊 **Dashboard Stats:**\n"
     message += f"• Total Indexers: **{total_indexers}**\n"

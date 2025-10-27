@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.9] - 2025-10-27
+
+### Fixed
+- Fixed Telegram bot notification message to properly display oracle update time by converting Unix timestamp to readable format
+- Removed redundant "Oracle Timestamp" field from Telegram notifications
+
+---
+
 ## [0.0.8] - 2025-10-22
 
 ### Added
