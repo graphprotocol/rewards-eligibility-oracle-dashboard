@@ -7,7 +7,7 @@ Sends notifications to all subscribed users about oracle updates and status chan
 import json
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 from telegram import Bot
 from telegram.error import TelegramError
@@ -21,6 +21,7 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 SUBSCRIBERS_FILE = 'subscribers_telegram.json'
 ACTIVITY_LOG_FILE = 'activity_log_indexers_status_changes.json'
 ACTIVE_INDEXERS_FILE = 'active_indexers.json'
+LAST_NOTIFICATION_FILE = 'last_telegram_notification.json'
 DASHBOARD_URL = 'http://dashboards.thegraph.foundation/reo/'
 
 # Set up logging
@@ -72,6 +73,53 @@ def load_active_indexers():
         return None
 
 
+def check_last_notification():
+    """
+    Check if we already sent a notification today.
+    Returns True if we can send (no notification today yet), False otherwise.
+    """
+    if not os.path.exists(LAST_NOTIFICATION_FILE):
+        return True  # No record, so we can send
+    
+    try:
+        with open(LAST_NOTIFICATION_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            last_date = data.get('last_notification_date')
+            
+            if not last_date:
+                return True
+            
+            # Get today's date in UTC
+            today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            
+            # If last notification was today, skip
+            if last_date == today:
+                logger.info(f"Notification already sent today ({today})")
+                return False
+            
+            return True
+    except Exception as e:
+        logger.error(f"Error checking last notification: {e}")
+        return True  # On error, allow sending
+
+
+def save_notification_timestamp():
+    """Save the current date as the last notification date."""
+    try:
+        today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        data = {
+            'last_notification_date': today,
+            'last_notification_timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+        }
+        
+        with open(LAST_NOTIFICATION_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        
+        logger.info(f"Saved notification timestamp for {today}")
+    except Exception as e:
+        logger.error(f"Error saving notification timestamp: {e}")
+
+
 def update_notification_stats():
     """Update the notification counter in subscribers file."""
     try:
@@ -90,13 +138,13 @@ def update_notification_stats():
 
 
 def format_oracle_update_message(indexers_data, activity_log):
-    """Format the oracle update notification message."""
+    """Format the oracle update notification message - simplified summary format."""
     metadata = indexers_data.get("metadata", {})
     last_oracle_update_time = metadata.get("last_oracle_update_time")
     
     # Convert Unix timestamp to readable format
     if last_oracle_update_time and isinstance(last_oracle_update_time, (int, float)):
-        update_time = datetime.fromtimestamp(last_oracle_update_time).strftime('%Y-%m-%d %H:%M:%S UTC')
+        update_time = datetime.fromtimestamp(last_oracle_update_time, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
     else:
         update_time = "Unknown"
     
@@ -110,16 +158,16 @@ def format_oracle_update_message(indexers_data, activity_log):
     status_changes = activity_log.get("status_changes", []) if activity_log else []
     has_changes = len(status_changes) > 0
     
-    # Build message
-    message = "🔔 **Oracle Update Detected!**\n"
+    # Build message - simplified format
+    message = "🔔 Oracle Update Detected!\n"
     message += "━━━━━━━━━━━━━━━━━━━\n"
-    message += f"**Update Time:** {update_time}\n\n"
+    message += f"Update Time: {update_time}\n\n"
     
-    message += "📊 **Dashboard Stats:**\n"
-    message += f"• Total Indexers: **{total_indexers}**\n"
-    message += f"• Eligible: **{eligible_count}** ✅\n"
-    message += f"• Grace Period: **{grace_count}** ⚠️\n"
-    message += f"• Ineligible: **{ineligible_count}** ❌\n\n"
+    message += "📊 Dashboard Stats:\n"
+    message += f"• Total Indexers: {total_indexers}\n"
+    message += f"• Eligible: {eligible_count} ✅\n"
+    message += f"• Grace Period: {grace_count} ⚠️\n"
+    message += f"• Ineligible: {ineligible_count} ❌\n\n"
     
     if has_changes:
         # Count changes by type
@@ -127,17 +175,14 @@ def format_oracle_update_message(indexers_data, activity_log):
         to_grace = sum(1 for c in status_changes if c.get("new_status") == "grace")
         to_ineligible = sum(1 for c in status_changes if c.get("new_status") == "ineligible")
         
-        message += "📝 **Status Changes Detected:**\n"
+        message += "📝 Status Changes Detected:\n"
         if to_eligible > 0:
-            message += f"• {to_eligible} indexer(s) → **eligible** ✅\n"
+            message += f"• {to_eligible} indexer(s) → eligible ✅\n"
         if to_grace > 0:
-            message += f"• {to_grace} indexer(s) → **grace period** ⚠️\n"
+            message += f"• {to_grace} indexer(s) → grace period ⚠️\n"
         if to_ineligible > 0:
-            message += f"• {to_ineligible} indexer(s) → **ineligible** ❌\n"
+            message += f"• {to_ineligible} indexer(s) → ineligible ❌\n"
         message += "\n"
-    else:
-        message += "ℹ️ **No Status Changes**\n"
-        message += "All indexers maintained their status.\n\n"
     
     message += f"🔍 [View Full Dashboard]({DASHBOARD_URL})"
     
@@ -231,11 +276,16 @@ async def send_notification_to_subscriber(bot, chat_id, message):
 
 
 async def send_notifications_async():
-    """Send notifications to all subscribers (async)."""
+    """Send notifications to all subscribers (async) - once per day only."""
     # Check if bot token is set
     if not TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not found in environment variables!")
         print("⚠ Telegram notifications skipped: TELEGRAM_BOT_TOKEN not set")
+        return False
+    
+    # Check if we already sent a notification today
+    if not check_last_notification():
+        print("ℹ️ Telegram notification already sent today. Skipping.")
         return False
     
     # Load subscribers
@@ -254,14 +304,8 @@ async def send_notifications_async():
         print("⚠ Could not load indexers data for notifications")
         return False
     
-    # Format messages
+    # Format summary message only
     oracle_message = format_oracle_update_message(indexers_data, activity_log)
-    
-    # Check if there are status changes for detailed message
-    status_changes = activity_log.get("status_changes", []) if activity_log else []
-    detailed_message = None
-    if status_changes:
-        detailed_message = format_detailed_changes_message(activity_log, indexers_data)
     
     # Create bot instance
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -278,14 +322,9 @@ async def send_notifications_async():
             continue
         
         try:
-            # Send oracle update message
+            # Send summary message only
             if await send_notification_to_subscriber(bot, chat_id, oracle_message):
                 success_count += 1
-                
-                # Send detailed changes if available (with small delay)
-                if detailed_message:
-                    await asyncio.sleep(0.5)  # Small delay between messages
-                    await send_notification_to_subscriber(bot, chat_id, detailed_message)
             else:
                 fail_count += 1
             
@@ -296,9 +335,10 @@ async def send_notifications_async():
             logger.error(f"Error sending to {chat_id}: {e}")
             fail_count += 1
     
-    # Update stats
+    # Update stats and save notification timestamp
     if success_count > 0:
         update_notification_stats()
+        save_notification_timestamp()
     
     print(f"✅ Telegram notifications sent: {success_count} successful, {fail_count} failed")
     logger.info(f"Notifications sent: {success_count} successful, {fail_count} failed")

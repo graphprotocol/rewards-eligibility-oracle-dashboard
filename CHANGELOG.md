@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.10] - 2025-10-29
+
+### Changed
+- Simplified Telegram notification message format to a cleaner summary style
+- Telegram notifications now limited to once per day to reduce notification frequency
+- Removed detailed changes message, sending only one summary message per notification
+- Added notification tracking system to prevent duplicate notifications on the same day
+
+---
+
 ## [0.0.9] - 2025-10-27
 
 ### Fixed
