@@ -19,6 +19,19 @@ This system ensures that rewards are distributed only to indexers who actively s
 - [GIP-0079 Forum Discussion](https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734)
 - [Rewards Eligibility Oracle (REO) for The Graph Protocol.](https://github.com/graphprotocol/rewards-eligibility-oracle)
 
+## 🆕 Recent Updates
+
+**Version 0.0.11** (Nov 3, 2025):
+- 🔧 **Provider-Agnostic Configuration**: Renamed `QUICK_NODE` to `RPC_ENDPOINT` - now works with any Ethereum RPC provider (Alchemy, Infura, QuickNode, Ankr, etc.)
+- 📝 **Updated Documentation**: All examples and guides updated to reflect the new configuration
+
+**Version 0.0.10** (Oct 29, 2025):
+- 📱 **Telegram Notifications**: Simplified notification format with once-per-day alerts
+
+See [CHANGELOG.md](CHANGELOG.md) for complete version history.
+
+---
+
 ## 📚 Documentation
 
 This project includes comprehensive documentation:

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.11] - 2025-11-03
+
+### Changed
+- Renamed environment variable from `QUICK_NODE` to `RPC_ENDPOINT` for provider-agnostic configuration
+- Updated all function parameters from `quicknode_url` to `rpc_endpoint` throughout codebase
+- Renamed `get_last_transaction_via_quicknode()` to `get_last_transaction_via_rpc()`
+- Configuration now supports any Ethereum RPC provider (Alchemy, Infura, QuickNode, Ankr, etc.)
+- Updated documentation to reflect provider flexibility
+- Updated all example files (`.env.example`, `env.example`) with new variable name
+
+---
+
 ## [0.0.10] - 2025-10-29
 
 ### Changed
