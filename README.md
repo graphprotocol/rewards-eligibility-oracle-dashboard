@@ -17,7 +17,7 @@ This system ensures that rewards are distributed only to indexers who actively s
 
 **Learn More:**
 - [GIP-0079 Forum Discussion](https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734)
-- [Full GIP-0079 Proposal](https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734)
+- [Rewards Eligibility Oracle (REO) for The Graph Protocol.](https://github.com/graphprotocol/rewards-eligibility-oracle)
 
 ## 📚 Documentation
 
