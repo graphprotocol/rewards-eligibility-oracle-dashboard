@@ -213,7 +213,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_message = f"""
 🔔 **Welcome to REO Dashboard Notifications!**
 
-This bot sends you real-time alerts about:
+This bot sends you a daily summary message about:
 • Oracle updates
 • Indexer status changes
 • Grace period expirations
@@ -221,8 +221,8 @@ This bot sends you real-time alerts about:
 📊 View the dashboard: {DASHBOARD_URL}
 
 **Available Commands:**
-/subscribe - Subscribe to all notifications
-/unsubscribe - Stop receiving all notifications
+/subscribe - Subscribe to the daily summary message
+/unsubscribe - Unsubscribe from the daily summary message
 /watch <address> - Watch a specific indexer
 /unwatch <address> - Stop watching an indexer
 /watchlist - Show your watched indexers
@@ -249,9 +249,9 @@ async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_subscribed(chat_id):
         activity_logger.info(f"SUBSCRIBE_ATTEMPT (Already subscribed) - Chat ID: {chat_id}, Username: @{username}, Name: {full_name}")
         await update.message.reply_text(
-            "✅ You're already subscribed to notifications!\n\n"
+            "✅ You're already subscribed to the daily summary!\n\n"
             f"📊 View dashboard: {DASHBOARD_URL}\n"
-            "Use /unsubscribe to stop receiving alerts."
+            "Use /unsubscribe to stop receiving the daily summary."
         )
         return
     
@@ -259,13 +259,14 @@ async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activity_logger.info(f"NEW_SUBSCRIBER ✅ - Chat ID: {chat_id}, Username: @{username}, Name: {full_name}")
         logger.info(f"New subscriber: {chat_id} (@{username})")
         await update.message.reply_text(
-            "🎉 **Successfully subscribed!**\n\n"
-            "You will now receive notifications about:\n"
+            "🎉 *Successfully subscribed!*\n\n"
+            "You will now receive a daily summary message about:\n"
             "• Oracle updates\n"
             "• Indexer status changes\n"
             "• Grace period expirations\n\n"
             f"📊 Dashboard: {DASHBOARD_URL}\n\n"
-            "Use /unsubscribe anytime to stop receiving alerts.",
+            "💡 Use `/watch <address>` to receive updates for specific indexers only.\n"
+            "Use /unsubscribe anytime to stop receiving the daily summary.",
             parse_mode='Markdown'
         )
     else:
@@ -290,7 +291,7 @@ async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activity_logger.info(f"UNSUBSCRIBE_ATTEMPT (Not subscribed) - Chat ID: {chat_id}, Username: @{username}")
         await update.message.reply_text(
             "ℹ️ You're not currently subscribed.\n\n"
-            "Use /subscribe to start receiving notifications."
+            "Use /subscribe to start receiving the daily summary."
         )
         return
     
@@ -299,7 +300,7 @@ async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Unsubscribed: {chat_id} (@{username})")
         await update.message.reply_text(
             "👋 *Successfully unsubscribed!*\n\n"
-            "You will no longer receive any notifications.\n"
+            "You will no longer receive the daily summary message.\n"
             "Your watch list has been cleared.\n\n"
             "You can subscribe again anytime using /subscribe.",
             parse_mode='Markdown'
@@ -329,7 +330,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"✅ *Subscription Status: Active*\n\n"
                     f"👤 Username: @{username or 'Unknown'}\n"
                     f"📅 Subscribed: {subscribed_at}\n"
-                    f"🔔 Receiving: Oracle & Status updates\n\n"
+                    f"🔔 Receiving: Daily summary message\n\n"
                     f"📊 Dashboard: {DASHBOARD_URL}",
                     parse_mode='Markdown'
                 )
@@ -338,7 +339,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activity_logger.info(f"STATUS_CHECK (Not subscribed) - Chat ID: {chat_id}, Username: @{username}")
         await update.message.reply_text(
             "❌ *Subscription Status: Not Active*\n\n"
-            "Use /subscribe to start receiving notifications.",
+            "Use /subscribe to start receiving the daily summary.",
             parse_mode='Markdown'
         )
 
@@ -411,7 +412,7 @@ async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ *Now watching indexer:*\n"
             f"`{indexer_address}`\n\n"
             f"👀 Total watched: {result['count']}\n\n"
-            f"You'll receive notifications only for watched indexers.\n"
+            f"Your daily summary will include updates only for watched indexers.\n"
             f"Use /watchlist to see all watched indexers.",
             parse_mode='Markdown'
         )
@@ -465,7 +466,7 @@ async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ *Stopped watching:*\n"
                 f"`{indexer_address}`\n\n"
                 f"📢 Watch list is now empty.\n"
-                f"You'll receive notifications for *all indexers*.",
+                f"Your daily summary will include updates for *all indexers*.",
                 parse_mode='Markdown'
             )
         else:
@@ -514,7 +515,7 @@ async def watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(watched) == 0:
         await update.message.reply_text(
             "📢 *Watching: All Indexers*\n\n"
-            "You're currently receiving notifications for all indexers.\n\n"
+            "Your daily summary includes updates for all indexers.\n\n"
             "💡 *Tip:* Use `/watch <address>` to watch specific indexers only.\n\n"
             f"📊 Dashboard: {DASHBOARD_URL}",
             parse_mode='Markdown'
@@ -524,7 +525,7 @@ async def watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"👀 *Watched Indexers ({len(watched)}):*\n\n"
             f"{indexer_list}\n\n"
-            f"You'll receive notifications only for these indexers.\n\n"
+            f"Your daily summary includes updates only for these indexers.\n\n"
             f"💡 Use `/unwatch <address>` to remove an indexer.\n"
             f"📊 Dashboard: {DASHBOARD_URL}",
             parse_mode='Markdown'
@@ -545,8 +546,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 /start - Welcome message and introduction
-/subscribe - Subscribe to all notifications
-/unsubscribe - Stop receiving all notifications
+/subscribe - Subscribe to the daily summary message
+/unsubscribe - Unsubscribe from the daily summary message
 /watch <address> - Watch a specific indexer
 /unwatch <address> - Stop watching an indexer
 /watchlist - Show your watched indexers
@@ -556,6 +557,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *What You'll Receive:*
 
+A daily summary message (sent once per day) with:
 🔔 *Oracle Updates* - When the eligibility oracle runs
 📝 *Status Changes* - When indexers change status
 ⚠️ *Grace Periods* - When indexers enter/exit grace period
@@ -563,8 +565,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Watch Specific Indexers:*
 
-By default, you receive notifications for all indexers.
-Use `/watch` to monitor only specific indexers you care about.
+By default, your daily summary includes all indexers.
+Use `/watch` to receive updates only for specific indexers you care about.
 
 *Dashboard:*
 {DASHBOARD_URL}
