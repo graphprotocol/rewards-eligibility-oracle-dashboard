@@ -540,9 +540,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity_logger.info(f"HELP_VIEW - Chat ID: {chat_id}, Username: @{username}")
     
     help_text = f"""
-**📖 REO Dashboard Bot - Help**
+📖 *REO Dashboard Bot - Help*
 
-**Available Commands:**
+*Available Commands:*
 
 /start - Welcome message and introduction
 /subscribe - Subscribe to all notifications
@@ -554,22 +554,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /stats - View bot statistics
 /help - Show this help message
 
-**What You'll Receive:**
+*What You'll Receive:*
 
-🔔 **Oracle Updates** - When the eligibility oracle runs
-📝 **Status Changes** - When indexers change status
-⚠️ **Grace Periods** - When indexers enter/exit grace period
-❌ **Ineligibility** - When indexers become ineligible
+🔔 *Oracle Updates* - When the eligibility oracle runs
+📝 *Status Changes* - When indexers change status
+⚠️ *Grace Periods* - When indexers enter/exit grace period
+❌ *Ineligibility* - When indexers become ineligible
 
-**Watch Specific Indexers:**
+*Watch Specific Indexers:*
 
 By default, you receive notifications for all indexers.
 Use `/watch` to monitor only specific indexers you care about.
 
-**Dashboard:**
+*Dashboard:*
 {DASHBOARD_URL}
 
-**About GIP-0079:**
+*About GIP-0079:*
 This bot monitors the Indexer Rewards Eligibility Oracle that tracks which indexers are eligible for rewards based on their service quality.
 
 Need help? Check the full documentation at the dashboard link above.

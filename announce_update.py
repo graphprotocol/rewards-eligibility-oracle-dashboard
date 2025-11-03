@@ -21,27 +21,27 @@ DASHBOARD_URL = 'http://dashboards.thegraph.foundation/reo/'
 
 # Announcement message
 ANNOUNCEMENT_MESSAGE = """
-**🎉 New Features Available!**
+🎉 *New Features Available!*
 
-Great news! The REO Dashboard bot now supports **indexer-specific subscriptions**!
+Great news! The REO Dashboard bot now supports *indexer-specific subscriptions*!
 
-**What's New:**
+*What's New:*
 
-🎯 **Watch Specific Indexers**
+🎯 *Watch Specific Indexers*
 You can now choose to receive notifications only for indexers you care about:
 
 • `/watch <address>` - Watch a specific indexer
 • `/unwatch <address>` - Stop watching an indexer
 • `/watchlist` - View your watched indexers
 
-**How It Works:**
+*How It Works:*
 
-✅ By default, you receive notifications for **all indexers** (current behavior)
-✅ Add indexers to your watch list to receive **only their updates**
+✅ By default, you receive notifications for *all indexers* (current behavior)
+✅ Add indexers to your watch list to receive *only their updates*
 ✅ Watch multiple indexers - it's up to you!
 ✅ Empty watch list = all notifications (default)
 
-**Example:**
+*Example:*
 ```
 /watch 0x1234567890abcdef1234567890abcdef12345678
 ```
