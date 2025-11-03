@@ -112,7 +112,8 @@ def add_subscriber(chat_id, username):
         "chat_id": chat_id,
         "username": username or "Unknown",
         "subscribed_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-        "active": True
+        "active": True,
+        "watched_indexers": []  # Empty array means "watch all"
     }
     data["subscribers"].append(subscriber)
     data["stats"]["total_subscribers"] = sum(1 for s in data["subscribers"] if s.get("active", False))
@@ -136,6 +137,67 @@ def remove_subscriber(chat_id):
     return False
 
 
+def add_watched_indexer(chat_id, indexer_address):
+    """Add an indexer to a subscriber's watch list."""
+    data = load_subscribers()
+    
+    # Normalize address to lowercase
+    indexer_address = indexer_address.lower()
+    
+    for sub in data.get("subscribers", []):
+        if sub.get("chat_id") == chat_id and sub.get("active", False):
+            # Initialize watched_indexers if it doesn't exist
+            if "watched_indexers" not in sub:
+                sub["watched_indexers"] = []
+            
+            # Check if already watching
+            if indexer_address in sub["watched_indexers"]:
+                return {"success": False, "reason": "already_watching"}
+            
+            # Add to watch list
+            sub["watched_indexers"].append(indexer_address)
+            save_subscribers(data)
+            return {"success": True, "count": len(sub["watched_indexers"])}
+    
+    return {"success": False, "reason": "not_subscribed"}
+
+
+def remove_watched_indexer(chat_id, indexer_address):
+    """Remove an indexer from a subscriber's watch list."""
+    data = load_subscribers()
+    
+    # Normalize address to lowercase
+    indexer_address = indexer_address.lower()
+    
+    for sub in data.get("subscribers", []):
+        if sub.get("chat_id") == chat_id and sub.get("active", False):
+            # Initialize watched_indexers if it doesn't exist
+            if "watched_indexers" not in sub:
+                sub["watched_indexers"] = []
+            
+            # Check if watching
+            if indexer_address not in sub["watched_indexers"]:
+                return {"success": False, "reason": "not_watching"}
+            
+            # Remove from watch list
+            sub["watched_indexers"].remove(indexer_address)
+            save_subscribers(data)
+            return {"success": True, "count": len(sub["watched_indexers"])}
+    
+    return {"success": False, "reason": "not_subscribed"}
+
+
+def get_watched_indexers(chat_id):
+    """Get list of watched indexers for a subscriber."""
+    data = load_subscribers()
+    
+    for sub in data.get("subscribers", []):
+        if sub.get("chat_id") == chat_id and sub.get("active", False):
+            return sub.get("watched_indexers", [])
+    
+    return None
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
     chat_id = update.effective_chat.id
@@ -157,8 +219,11 @@ This bot sends you real-time alerts about:
 📊 View the dashboard: {DASHBOARD_URL}
 
 **Available Commands:**
-/subscribe - Subscribe to notifications
+/subscribe - Subscribe to all notifications
 /unsubscribe - Stop receiving notifications
+/watch <address> - Watch a specific indexer
+/unwatch <address> - Stop watching an indexer
+/watchlist - Show your watched indexers
 /status - Check your subscription status
 /stats - View bot statistics
 /help - Show this help message
@@ -297,6 +362,172 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /watch command - watch a specific indexer."""
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username
+    
+    logger.info(f"/watch command from {chat_id} (@{username})")
+    
+    if not is_subscribed(chat_id):
+        await update.message.reply_text(
+            "❌ You must be subscribed first.\n\n"
+            "Use /subscribe to get started."
+        )
+        return
+    
+    # Check if address provided
+    if not context.args or len(context.args) == 0:
+        await update.message.reply_text(
+            "⚠️ **Usage:** /watch <indexer_address>\n\n"
+            "**Example:**\n"
+            "`/watch 0x1234...5678`\n\n"
+            "You can watch specific indexers to receive notifications only about them.\n"
+            "Leave your watch list empty to receive all notifications.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    indexer_address = context.args[0].strip()
+    
+    # Basic validation
+    if not indexer_address.startswith('0x') or len(indexer_address) != 42:
+        await update.message.reply_text(
+            "❌ Invalid Ethereum address format.\n\n"
+            "Address should start with 0x and be 42 characters long.\n"
+            "**Example:** `0x1234567890abcdef1234567890abcdef12345678`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    result = add_watched_indexer(chat_id, indexer_address)
+    
+    if result["success"]:
+        activity_logger.info(f"WATCH_ADD ✅ - Chat ID: {chat_id}, Username: @{username}, Indexer: {indexer_address}")
+        await update.message.reply_text(
+            f"✅ **Now watching indexer:**\n"
+            f"`{indexer_address}`\n\n"
+            f"👀 Total watched: {result['count']}\n\n"
+            f"You'll receive notifications only for watched indexers.\n"
+            f"Use /watchlist to see all watched indexers.",
+            parse_mode='Markdown'
+        )
+    elif result["reason"] == "already_watching":
+        await update.message.reply_text(
+            f"ℹ️ You're already watching this indexer:\n"
+            f"`{indexer_address}`\n\n"
+            f"Use /watchlist to see all watched indexers.",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "❌ Failed to add indexer to watch list. Please try again."
+        )
+
+
+async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /unwatch command - stop watching a specific indexer."""
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username
+    
+    logger.info(f"/unwatch command from {chat_id} (@{username})")
+    
+    if not is_subscribed(chat_id):
+        await update.message.reply_text(
+            "❌ You must be subscribed first.\n\n"
+            "Use /subscribe to get started."
+        )
+        return
+    
+    # Check if address provided
+    if not context.args or len(context.args) == 0:
+        await update.message.reply_text(
+            "⚠️ **Usage:** /unwatch <indexer_address>\n\n"
+            "**Example:**\n"
+            "`/unwatch 0x1234...5678`\n\n"
+            "Use /watchlist to see all watched indexers.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    indexer_address = context.args[0].strip()
+    
+    result = remove_watched_indexer(chat_id, indexer_address)
+    
+    if result["success"]:
+        activity_logger.info(f"WATCH_REMOVE ✅ - Chat ID: {chat_id}, Username: @{username}, Indexer: {indexer_address}")
+        
+        if result["count"] == 0:
+            await update.message.reply_text(
+                f"✅ **Stopped watching:**\n"
+                f"`{indexer_address}`\n\n"
+                f"📢 Watch list is now empty.\n"
+                f"You'll receive notifications for **all indexers**.",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                f"✅ **Stopped watching:**\n"
+                f"`{indexer_address}`\n\n"
+                f"👀 Total watched: {result['count']}\n\n"
+                f"Use /watchlist to see remaining watched indexers.",
+                parse_mode='Markdown'
+            )
+    elif result["reason"] == "not_watching":
+        await update.message.reply_text(
+            f"ℹ️ You're not watching this indexer:\n"
+            f"`{indexer_address}`\n\n"
+            f"Use /watchlist to see watched indexers.",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "❌ Failed to remove indexer from watch list. Please try again."
+        )
+
+
+async def watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /watchlist command - show list of watched indexers."""
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username
+    
+    logger.info(f"/watchlist command from {chat_id} (@{username})")
+    
+    if not is_subscribed(chat_id):
+        await update.message.reply_text(
+            "❌ You must be subscribed first.\n\n"
+            "Use /subscribe to get started."
+        )
+        return
+    
+    watched = get_watched_indexers(chat_id)
+    
+    if watched is None:
+        await update.message.reply_text(
+            "❌ Could not retrieve watch list. Please try again."
+        )
+        return
+    
+    if len(watched) == 0:
+        await update.message.reply_text(
+            "📢 **Watching: All Indexers**\n\n"
+            "You're currently receiving notifications for all indexers.\n\n"
+            "💡 **Tip:** Use `/watch <address>` to watch specific indexers only.\n\n"
+            f"📊 Dashboard: {DASHBOARD_URL}",
+            parse_mode='Markdown'
+        )
+    else:
+        indexer_list = "\n".join([f"• `{addr}`" for addr in watched])
+        await update.message.reply_text(
+            f"👀 **Watched Indexers ({len(watched)}):**\n\n"
+            f"{indexer_list}\n\n"
+            f"You'll receive notifications only for these indexers.\n\n"
+            f"💡 Use `/unwatch <address>` to remove an indexer.\n"
+            f"📊 Dashboard: {DASHBOARD_URL}",
+            parse_mode='Markdown'
+        )
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
     chat_id = update.effective_chat.id
@@ -311,8 +542,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 **Available Commands:**
 
 /start - Welcome message and introduction
-/subscribe - Subscribe to notifications
+/subscribe - Subscribe to all notifications
 /unsubscribe - Stop receiving notifications
+/watch <address> - Watch a specific indexer
+/unwatch <address> - Stop watching an indexer
+/watchlist - Show your watched indexers
 /status - Check your subscription status
 /stats - View bot statistics
 /help - Show this help message
@@ -323,6 +557,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📝 **Status Changes** - When indexers change status
 ⚠️ **Grace Periods** - When indexers enter/exit grace period
 ❌ **Ineligibility** - When indexers become ineligible
+
+**Watch Specific Indexers:**
+
+By default, you receive notifications for all indexers.
+Use `/watch` to monitor only specific indexers you care about.
 
 **Dashboard:**
 {DASHBOARD_URL}
@@ -396,6 +635,9 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("subscribe", subscribe))
     application.add_handler(CommandHandler("unsubscribe", unsubscribe))
+    application.add_handler(CommandHandler("watch", watch))
+    application.add_handler(CommandHandler("unwatch", unwatch))
+    application.add_handler(CommandHandler("watchlist", watchlist))
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("help", help_command))

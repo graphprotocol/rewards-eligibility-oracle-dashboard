@@ -33,6 +33,7 @@ The Telegram bot provides real-time notifications to subscribers about:
 - ✅ Auto-start on VPS boot
 - ✅ Auto-restart on crash
 - ✅ Self-service subscription (users subscribe themselves)
+- ✅ Watch specific indexers (get notifications only for indexers you care about)
 - ✅ Comprehensive logging
 - ✅ Rate limiting protection
 
@@ -554,8 +555,11 @@ Users interact with the bot using these commands:
 | Command | Description |
 |---------|-------------|
 | `/start` | Welcome message with bot introduction |
-| `/subscribe` | Subscribe to receive notifications |
+| `/subscribe` | Subscribe to receive all notifications |
 | `/unsubscribe` | Stop receiving notifications |
+| `/watch <address>` | Watch a specific indexer (receive notifications only for that indexer) |
+| `/unwatch <address>` | Stop watching a specific indexer |
+| `/watchlist` | Show all watched indexers |
 | `/status` | Check subscription status |
 | `/stats` | View bot statistics (total subscribers, notifications sent) |
 | `/help` | Show available commands and help |
@@ -567,6 +571,30 @@ Users interact with the bot using these commands:
 2. Send `/start` or `/subscribe`
 3. Receive confirmation message
 4. Start getting notifications! 🎉
+
+### Watching Specific Indexers (v0.0.13+)
+
+By default, subscribers receive notifications for **all indexers**. However, users can choose to watch specific indexers only:
+
+**Watch a specific indexer:**
+```
+/watch 0x1234567890abcdef1234567890abcdef12345678
+```
+
+**Stop watching an indexer:**
+```
+/unwatch 0x1234567890abcdef1234567890abcdef12345678
+```
+
+**View watched indexers:**
+```
+/watchlist
+```
+
+**Behavior:**
+- Empty watch list = receive notifications for all indexers (default)
+- Non-empty watch list = receive notifications only for watched indexers
+- Users can watch multiple indexers
 
 ---
 

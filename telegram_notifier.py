@@ -275,6 +275,33 @@ async def send_notification_to_subscriber(bot, chat_id, message):
         return False
 
 
+def filter_status_changes_for_subscriber(activity_log, watched_indexers):
+    """
+    Filter status changes based on subscriber's watched indexers.
+    If watched_indexers is empty, return all changes.
+    If watched_indexers has addresses, only return changes for those addresses.
+    """
+    if not activity_log or "status_changes" not in activity_log:
+        return []
+    
+    all_changes = activity_log.get("status_changes", [])
+    
+    # If no specific indexers watched, return all changes
+    if not watched_indexers or len(watched_indexers) == 0:
+        return all_changes
+    
+    # Normalize watched addresses to lowercase
+    watched_lower = [addr.lower() for addr in watched_indexers]
+    
+    # Filter changes to only watched indexers
+    filtered_changes = [
+        change for change in all_changes
+        if change.get("address", "").lower() in watched_lower
+    ]
+    
+    return filtered_changes
+
+
 async def send_notifications_async():
     """Send notifications to all subscribers (async) - once per day only."""
     # Check if bot token is set
@@ -304,9 +331,6 @@ async def send_notifications_async():
         print("⚠ Could not load indexers data for notifications")
         return False
     
-    # Format summary message only
-    oracle_message = format_oracle_update_message(indexers_data, activity_log)
-    
     # Create bot instance
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     
@@ -322,7 +346,25 @@ async def send_notifications_async():
             continue
         
         try:
-            # Send summary message only
+            # Get subscriber's watched indexers
+            watched_indexers = subscriber.get("watched_indexers", [])
+            
+            # Filter activity log based on watched indexers
+            filtered_activity_log = None
+            if activity_log and watched_indexers and len(watched_indexers) > 0:
+                filtered_changes = filter_status_changes_for_subscriber(activity_log, watched_indexers)
+                filtered_activity_log = {
+                    "metadata": activity_log.get("metadata", {}),
+                    "status_changes": filtered_changes
+                }
+            else:
+                # Send all changes (default behavior)
+                filtered_activity_log = activity_log
+            
+            # Format message with filtered data
+            oracle_message = format_oracle_update_message(indexers_data, filtered_activity_log)
+            
+            # Send message
             if await send_notification_to_subscriber(bot, chat_id, oracle_message):
                 success_count += 1
             else:

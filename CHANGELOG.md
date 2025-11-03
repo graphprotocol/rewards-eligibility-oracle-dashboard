@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.13] - 2025-11-03
+
+### Added
+- **Indexer-specific subscriptions** in Telegram bot - watch individual indexers instead of all
+- New `/watch <address>` command - subscribe to notifications for specific indexers only
+- New `/unwatch <address>` command - remove indexer from watch list
+- New `/watchlist` command - view all watched indexers
+- Filtered notifications - users with watched indexers only receive updates about those specific indexers
+- Empty watch list means receive all notifications (default behavior)
+
+### Changed
+- Updated subscriber data structure to include `watched_indexers` array
+- Telegram notifier now filters status changes based on each subscriber's watch list
+- Updated bot help text and welcome messages with new commands
+- Enhanced `/status` command to show watched indexers (future improvement)
+
+---
+
 ## [0.0.12] - 2025-11-03
 
 ### Added
