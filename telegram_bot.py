@@ -211,7 +211,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"/start command from {chat_id} (@{username})")
     
     welcome_message = f"""
-🔔 **Welcome to REO Dashboard Notifications!**
+🔔 *Welcome to REO Dashboard Notifications!*
 
 This bot sends you a daily summary message about:
 • Oracle updates
