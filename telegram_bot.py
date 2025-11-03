@@ -383,11 +383,11 @@ async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if address provided
     if not context.args or len(context.args) == 0:
         await update.message.reply_text(
-            "⚠️ **Usage:** /watch <indexer_address>\n\n"
-            "**Example:**\n"
-            "`/watch 0x1234...5678`\n\n"
-            "You can watch specific indexers to receive notifications only about them.\n"
-            "Leave your watch list empty to receive all notifications.",
+            "⚠️ *Usage:* `/watch <indexer_address>`\n\n"
+            "*Example:*\n"
+            "`/watch 0x1234567890abcdef1234567890abcdef12345678`\n\n"
+            "You can watch multiple indexers. Your daily summary will include updates only for watched indexers.\n\n"
+            "💡 Leave your watch list empty to receive updates for all indexers.",
             parse_mode='Markdown'
         )
         return
@@ -397,9 +397,9 @@ async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Basic validation
     if not indexer_address.startswith('0x') or len(indexer_address) != 42:
         await update.message.reply_text(
-            "❌ Invalid Ethereum address format.\n\n"
-            "Address should start with 0x and be 42 characters long.\n"
-            "**Example:** `0x1234567890abcdef1234567890abcdef12345678`",
+            "❌ *Invalid Ethereum address format.*\n\n"
+            "Address should start with `0x` and be 42 characters long.\n\n"
+            "*Example:* `0x1234567890abcdef1234567890abcdef12345678`",
             parse_mode='Markdown'
         )
         return
@@ -446,9 +446,9 @@ async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if address provided
     if not context.args or len(context.args) == 0:
         await update.message.reply_text(
-            "⚠️ **Usage:** /unwatch <indexer_address>\n\n"
-            "**Example:**\n"
-            "`/unwatch 0x1234...5678`\n\n"
+            "⚠️ *Usage:* `/unwatch <indexer_address>`\n\n"
+            "*Example:*\n"
+            "`/unwatch 0x1234567890abcdef1234567890abcdef12345678`\n\n"
             "Use /watchlist to see all watched indexers.",
             parse_mode='Markdown'
         )
