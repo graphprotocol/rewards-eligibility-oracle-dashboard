@@ -170,19 +170,33 @@ def format_oracle_update_message(indexers_data, activity_log):
     message += f"• Ineligible: {ineligible_count} ❌\n\n"
     
     if has_changes:
-        # Count changes by type
-        to_eligible = sum(1 for c in status_changes if c.get("new_status") == "eligible")
-        to_grace = sum(1 for c in status_changes if c.get("new_status") == "grace")
-        to_ineligible = sum(1 for c in status_changes if c.get("new_status") == "ineligible")
+        # Group changes by new status
+        to_eligible = [c for c in status_changes if c.get("new_status") == "eligible"]
+        to_grace = [c for c in status_changes if c.get("new_status") == "grace"]
+        to_ineligible = [c for c in status_changes if c.get("new_status") == "ineligible"]
         
-        message += "📝 Status Changes Detected:\n"
-        if to_eligible > 0:
-            message += f"• {to_eligible} indexer(s) → eligible ✅\n"
-        if to_grace > 0:
-            message += f"• {to_grace} indexer(s) → grace period ⚠️\n"
-        if to_ineligible > 0:
-            message += f"• {to_ineligible} indexer(s) → ineligible ❌\n"
-        message += "\n"
+        message += "📝 *Status Changes Detected:*\n\n"
+        
+        # Show indexers that became eligible
+        if to_eligible:
+            for change in to_eligible:
+                addr = change.get("address", "Unknown")
+                prev_status = change.get("previous_status", "unknown")
+                message += f"`{addr}`\n{prev_status} → eligible ✅\n\n"
+        
+        # Show indexers that entered grace period
+        if to_grace:
+            for change in to_grace:
+                addr = change.get("address", "Unknown")
+                prev_status = change.get("previous_status", "unknown")
+                message += f"`{addr}`\n{prev_status} → grace period ⚠️\n\n"
+        
+        # Show indexers that became ineligible
+        if to_ineligible:
+            for change in to_ineligible:
+                addr = change.get("address", "Unknown")
+                prev_status = change.get("previous_status", "unknown")
+                message += f"`{addr}`\n{prev_status} → ineligible ❌\n\n"
     
     message += f"🔍 [View Full Dashboard]({DASHBOARD_URL})"
     
