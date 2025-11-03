@@ -23,7 +23,7 @@ Complete guide for setting up the REO Dashboard Telegram notification bot.
 
 ## Overview
 
-The Telegram bot provides real-time notifications to subscribers about:
+The Telegram bot provides daily summary notifications to subscribers about:
 - 🔔 Oracle updates
 - 📝 Indexer status changes
 - ⚠️ Grace period alerts
@@ -102,7 +102,7 @@ Send these commands to BotFather to customize your bot:
 ```
 Choose your bot, then send:
 ```
-Get real-time notifications about REO Dashboard indexer status changes and oracle updates.
+Get daily summary notifications about REO Dashboard indexer status changes and oracle updates. Watch specific indexers or receive updates for all.
 ```
 
 ```
