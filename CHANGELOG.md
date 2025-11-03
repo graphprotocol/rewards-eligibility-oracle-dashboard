@@ -16,12 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `/watchlist` command - view all watched indexers
 - Filtered notifications - users with watched indexers only receive updates about those specific indexers
 - Empty watch list means receive all notifications (default behavior)
+- **Announcement script** (`announce_update.py`) - notify existing subscribers about new features
+- Confirmation prompt before sending announcements with success/failure statistics
 
 ### Changed
 - Updated subscriber data structure to include `watched_indexers` array
 - Telegram notifier now filters status changes based on each subscriber's watch list
 - Updated bot help text and welcome messages with new commands
 - Enhanced `/status` command to show watched indexers (future improvement)
+- **Clarified `/unsubscribe` functionality** - now explicitly states "Stop receiving all notifications"
+- `/unsubscribe` now clears the watched_indexers list for a clean slate on resubscribe
+- **Improved message formatting** - made section headings bold for better readability
+- Updated README_TelegramBOT.md with announcement script usage instructions
 
 ---
 
