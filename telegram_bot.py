@@ -408,7 +408,7 @@ async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if result["success"]:
         activity_logger.info(f"WATCH_ADD ✅ - Chat ID: {chat_id}, Username: @{username}, Indexer: {indexer_address}")
         await update.message.reply_text(
-            f"✅ **Now watching indexer:**\n"
+            f"✅ *Now watching indexer:*\n"
             f"`{indexer_address}`\n\n"
             f"👀 Total watched: {result['count']}\n\n"
             f"You'll receive notifications only for watched indexers.\n"
@@ -462,15 +462,15 @@ async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if result["count"] == 0:
             await update.message.reply_text(
-                f"✅ **Stopped watching:**\n"
+                f"✅ *Stopped watching:*\n"
                 f"`{indexer_address}`\n\n"
                 f"📢 Watch list is now empty.\n"
-                f"You'll receive notifications for **all indexers**.",
+                f"You'll receive notifications for *all indexers*.",
                 parse_mode='Markdown'
             )
         else:
             await update.message.reply_text(
-                f"✅ **Stopped watching:**\n"
+                f"✅ *Stopped watching:*\n"
                 f"`{indexer_address}`\n\n"
                 f"👀 Total watched: {result['count']}\n\n"
                 f"Use /watchlist to see remaining watched indexers.",
@@ -513,16 +513,16 @@ async def watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if len(watched) == 0:
         await update.message.reply_text(
-            "📢 **Watching: All Indexers**\n\n"
+            "📢 *Watching: All Indexers*\n\n"
             "You're currently receiving notifications for all indexers.\n\n"
-            "💡 **Tip:** Use `/watch <address>` to watch specific indexers only.\n\n"
+            "💡 *Tip:* Use `/watch <address>` to watch specific indexers only.\n\n"
             f"📊 Dashboard: {DASHBOARD_URL}",
             parse_mode='Markdown'
         )
     else:
         indexer_list = "\n".join([f"• `{addr}`" for addr in watched])
         await update.message.reply_text(
-            f"👀 **Watched Indexers ({len(watched)}):**\n\n"
+            f"👀 *Watched Indexers ({len(watched)}):*\n\n"
             f"{indexer_list}\n\n"
             f"You'll receive notifications only for these indexers.\n\n"
             f"💡 Use `/unwatch <address>` to remove an indexer.\n"
