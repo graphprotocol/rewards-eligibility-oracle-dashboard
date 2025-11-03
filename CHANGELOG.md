@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.12] - 2025-11-03
+
+### Added
+- New "Last Renewed" column in dashboard table showing when each indexer's eligibility was last renewed
+- Displays `eligibility_renewal_time` in human-readable format (e.g., "16-Nov-2025 at 13:31:42 UTC")
+- Shows "Never" for indexers that have never been eligible
+- Column positioned between "Status" and "Eligible Until" for better readability
+
+### Changed
+- Updated table structure to accommodate new column
+- Enhanced indexer eligibility tracking with renewal timestamp visibility
+
+---
+
 ## [0.0.11] - 2025-11-03
 
 ### Changed

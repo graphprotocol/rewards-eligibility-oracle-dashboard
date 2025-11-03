@@ -15,7 +15,7 @@ from typing import List, Tuple, Optional
 from dotenv import load_dotenv
 
 # Version of the dashboard generator
-VERSION = "0.0.11"
+VERSION = "0.0.12"
 
 # Import telegram notifier (will be skipped if module not available)
 try:
@@ -726,6 +726,13 @@ def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str =
         
         for indexer in indexers:
             eligibility_renewal_time = indexer.get("eligibility_renewal_time", 0)
+            
+            # Format eligibility_renewal_time to readable format
+            if eligibility_renewal_time > 0:
+                dt = datetime.fromtimestamp(eligibility_renewal_time, tz=timezone.utc)
+                indexer["eligibility_renewal_time_readable"] = dt.strftime("%-d-%b-%Y at %H:%M:%S UTC")
+            else:
+                indexer["eligibility_renewal_time_readable"] = "Never"
             
             # Set status based on comparison with last_oracle_update_time and grace period
             if last_oracle_update_time and eligibility_renewal_time == last_oracle_update_time:
@@ -1886,7 +1893,8 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                         <th class="sortable" data-column="0">Indexer Address</th>
                         <th class="sortable" data-column="1">ENS Name</th>
                         <th class="sortable" data-column="2">Status</th>
-                        <th class="sortable" data-column="3">Eligible Until</th>
+                        <th class="sortable" data-column="3">Last Renewed</th>
+                        <th class="sortable" data-column="4">Eligible Until</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -1910,6 +1918,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         ens_display = ens_name if ens_name else "No ENS"
         ens_class = "ens-name" if ens_name else "empty-ens"
         explorer_url = f"https://thegraph.com/explorer/profile/{address}?view=Indexing&chain=arbitrum-one"
+        eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
         
         # Set status badge based on eligibility
         if is_eligible:
@@ -1921,6 +1930,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                         <td><a href="{explorer_url}" target="_blank" class="address-link"><span class="address">{address}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a></td>
                         <td><span class="{ens_class}">{ens_display}</span></td>
                         <td>{status_badge}</td>
+                        <td>{eligibility_renewal_time_readable}</td>
                         <td></td>
                     </tr>
 """
@@ -1955,6 +1965,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         address = indexer.get("address", "")
         ens_name = indexer.get("ens_name", "")
         status = indexer.get("status", "ineligible")
+        eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
         eligible_until_readable = indexer.get("eligible_until_readable", "")
         
         # Set status badge based on status
@@ -1965,7 +1976,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         else:
             status_badge = '<span class="legend-badge ineligible">ineligible</span>'
         
-        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligible_until_readable}", "{status}"],
+        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_readable}", "{eligible_until_readable}", "{status}"],
 """
 
     html_content += """        ];
@@ -1990,8 +2001,8 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                 const matchesSearch = row[0].toLowerCase().includes(searchTerm) || 
                                      row[1].toLowerCase().includes(searchTerm);
                 
-                // Check status filter (row[4] is the status string)
-                const matchesFilter = !activeFilter || row[4] === activeFilter;
+                // Check status filter (row[5] is the status string)
+                const matchesFilter = !activeFilter || row[5] === activeFilter;
                 
                 return matchesSearch && matchesFilter;
             });
@@ -2080,9 +2091,9 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             currentData.sort((a, b) => {
                 // Special handling when sorting by status column (index 2)
                 if (column === 2) {
-                    // Use the plain text status (row[4]) for sorting
-                    const aStatus = a[4].toLowerCase();
-                    const bStatus = b[4].toLowerCase();
+                    // Use the plain text status (row[5]) for sorting
+                    const aStatus = a[5].toLowerCase();
+                    const bStatus = b[5].toLowerCase();
                     
                     if (aStatus < bStatus) return sortDirection === 'asc' ? -1 : 1;
                     if (aStatus > bStatus) return sortDirection === 'asc' ? 1 : -1;
@@ -2098,8 +2109,8 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                     return 3;
                 };
                 
-                const aStatusPriority = getStatusPriority(a[4]);
-                const bStatusPriority = getStatusPriority(b[4]);
+                const aStatusPriority = getStatusPriority(a[5]);
+                const bStatusPriority = getStatusPriority(b[5]);
                 
                 // If status priority differs, sort by priority
                 if (aStatusPriority !== bStatusPriority) {
@@ -2126,7 +2137,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         function renderTable() {
             tableBody.innerHTML = '';
             currentData.forEach((row, index) => {
-                const [address, ensName, status, eligibleUntil, statusString] = row;
+                const [address, ensName, status, lastRenewed, eligibleUntil, statusString] = row;
                 const ensDisplay = ensName || 'No ENS';
                 const ensClass = ensName ? 'ens-name' : 'empty-ens';
                 const explorerUrl = `https://thegraph.com/explorer/profile/${address}?view=Indexing&chain=arbitrum-one`;
@@ -2136,6 +2147,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                         <td><a href="${explorerUrl}" target="_blank" class="address-link"><span class="address">${address}</span></a></td>
                         <td><span class="${ensClass}">${ensDisplay}</span></td>
                         <td>${status}</td>
+                        <td>${lastRenewed}</td>
                         <td>${eligibleUntil}</td>
                     </tr>
                 `;
