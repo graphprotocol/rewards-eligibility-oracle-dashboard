@@ -18,16 +18,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Empty watch list means receive all notifications (default behavior)
 - **Announcement script** (`announce_update.py`) - notify existing subscribers about new features
 - Confirmation prompt before sending announcements with success/failure statistics
+- **Direct link to GIP-0079 proposal** in help message for easy reference
+- **Individual indexer addresses shown in notifications** - see exactly which indexers changed status
 
 ### Changed
 - Updated subscriber data structure to include `watched_indexers` array
 - Telegram notifier now filters status changes based on each subscriber's watch list
+- **Notification messages now show specific indexer addresses** with status transitions (e.g., "eligible → grace period")
 - Updated bot help text and welcome messages with new commands
-- Enhanced `/status` command to show watched indexers (future improvement)
+- **Clarified messaging: "daily summary message"** instead of "real-time notifications" throughout
+- Subscribe/unsubscribe commands now reference "daily summary message" for accuracy
+- Watch/unwatch messages updated to reference "daily summary" context
+- **Fixed Telegram Markdown formatting** - using single asterisks (*text*) for bold instead of double (**text**)
+- **Made section headings bold** throughout bot messages for better readability
+- Enhanced `/status` command to show "Daily summary message" in status
 - **Clarified `/unsubscribe` functionality** - now explicitly states "Stop receiving all notifications"
 - `/unsubscribe` now clears the watched_indexers list for a clean slate on resubscribe
-- **Improved message formatting** - made section headings bold for better readability
-- Updated README_TelegramBOT.md with announcement script usage instructions
+- Improved watch/unwatch command usage messages with full address examples
+- Updated README_TelegramBOT.md with:
+  - Announcement script usage instructions
+  - Watch specific indexers feature documentation
+  - Daily summary messaging clarification
+  - New command documentation
+- Address validation shows full 42-character format in error messages
 
 ---
 

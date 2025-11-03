@@ -21,12 +21,21 @@ This system ensures that rewards are distributed only to indexers who actively s
 
 ## 🆕 Recent Updates
 
+**Version 0.0.13** (Nov 3, 2025):
+- 🎯 **Watch Specific Indexers**: New `/watch`, `/unwatch`, and `/watchlist` commands let subscribers monitor specific indexers
+- 📧 **Personalized Notifications**: Daily summaries filtered based on each user's watched indexers
+- 📋 **Detailed Status Changes**: Notifications now show individual indexer addresses with their status transitions
+- 📢 **Announcement Tool**: New script to notify existing subscribers about feature updates
+- 📝 **Daily Summary Messaging**: Clarified that bot sends daily summary messages, not real-time notifications
+- 🔗 **GIP-0079 Reference**: Added direct link to proposal in help message
+
+**Version 0.0.12** (Nov 3, 2025):
+- 📅 **Last Renewed Column**: New column showing when each indexer's eligibility was last renewed
+- 🎨 **Hover Tooltips**: CSS-based tooltips show full timestamps on date hover for faster loading
+- 📏 **Short Date Format**: Dates display as "2-Nov-2025" by default, full timestamp on hover
+
 **Version 0.0.11** (Nov 3, 2025):
 - 🔧 **Provider-Agnostic Configuration**: Renamed `QUICK_NODE` to `RPC_ENDPOINT` - now works with any Ethereum RPC provider (Alchemy, Infura, QuickNode, Ankr, etc.)
-- 📝 **Updated Documentation**: All examples and guides updated to reflect the new configuration
-
-**Version 0.0.10** (Oct 29, 2025):
-- 📱 **Telegram Notifications**: Simplified notification format with once-per-day alerts
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
@@ -236,66 +245,85 @@ The script tries multiple methods to fetch the last transaction data (in priorit
   - Telegram bot that runs 24/7 to handle user subscriptions
   - Manages subscriber database in `subscribers_telegram.json`
   - Logs all activity to `logs/` directory
-  - Provides commands: `/start`, `/subscribe`, `/unsubscribe`, `/status`, `/stats`, `/help`, `/test`
+  - Provides commands: `/start`, `/subscribe`, `/unsubscribe`, `/watch`, `/unwatch`, `/watchlist`, `/status`, `/stats`, `/help`, `/test`
+  - Supports indexer-specific subscriptions with personalized notifications
 - **`telegram_notifier.py`**: 
   - Called by `generate_dashboard.py` after status changes are logged
   - Reads subscriber list and activity log
-  - Sends formatted notifications about oracle updates and status changes
+  - Filters notifications based on each subscriber's watched indexers
+  - Shows individual indexer addresses with status transitions
+  - Sends formatted daily summary messages (once per day maximum)
   - Handles rate limiting and error recovery
+- **`announce_update.py`**:
+  - Tool to notify all existing subscribers about new features
+  - Includes confirmation prompt and success/failure statistics
 
 ## Telegram Notifications 🔔
 
-The dashboard now supports **real-time Telegram notifications** for oracle updates and indexer status changes. Users can subscribe to a Telegram bot to receive alerts.
+The dashboard now supports **daily summary notifications** via Telegram bot for oracle updates and indexer status changes. Users can subscribe to receive daily summaries and optionally watch specific indexers.
 
 ### Features
 
-- 📢 **Oracle Update Alerts**: Notification when the oracle runs and updates eligibility
-- 📝 **Status Change Reports**: Detailed breakdown of indexers that changed status
+- 📧 **Daily Summary Messages**: Once-per-day notification when the oracle runs and updates eligibility
+- 🎯 **Watch Specific Indexers**: Subscribe to updates for specific indexers using `/watch <address>` command
+- 📝 **Detailed Status Changes**: Shows individual indexer addresses with their status transitions
 - ⚠️ **Grace Period Monitoring**: Alerts when indexers enter/exit grace period
 - ❌ **Ineligibility Notifications**: Track when indexers become ineligible
 - 📊 **Summary Statistics**: Total counts of eligible, grace, and ineligible indexers
 - 👥 **Self-Service Subscription**: Users can subscribe/unsubscribe anytime via bot commands
+- 📋 **Watch List Management**: `/watchlist` command to view watched indexers
+- 🔗 **GIP-0079 Reference**: Direct link to proposal in help message
 
 ### Notification Examples
 
-**Oracle Update Message:**
+**Daily Summary Message (with status changes):**
 ```
 🔔 Oracle Update Detected!
 ━━━━━━━━━━━━━━━━━━━
-Update Time: 22 Oct 2025 at 14:30 (UTC)
-Oracle Timestamp: 1761040822
+Update Time: 2025-11-03 14:30:45 UTC
 
 📊 Dashboard Stats:
-• Total Indexers: 99
-• Eligible: 60 ✅
-• Grace Period: 2 ⚠️
-• Ineligible: 37 ❌
+• Total Indexers: 150
+• Eligible: 142 ✅
+• Grace Period: 5 ⚠️
+• Ineligible: 3 ❌
 
 📝 Status Changes Detected:
-• 3 indexer(s) → eligible ✅
-• 2 indexer(s) → grace period ⚠️
-• 1 indexer(s) → ineligible ❌
 
-🔍 View Full Dashboard
+0x1234567890abcdef1234567890abcdef12345678
+ineligible → eligible ✅
+
+0xabcdef1234567890abcdef1234567890abcdef12
+eligible → grace period ⚠️
+
+0x5555666677778888999900001111222233334444
+grace → ineligible ❌
+
+🔍 [View Full Dashboard](http://dashboards.thegraph.foundation/reo/)
 ```
 
-**Detailed Status Changes:**
+**If watching specific indexers:**
+When you use `/watch <address>`, you only receive notifications about your watched indexers. Example:
+
 ```
-📝 Detailed Status Changes
+🔔 Oracle Update Detected!
 ━━━━━━━━━━━━━━━━━━━
+Update Time: 2025-11-03 14:30:45 UTC
 
-✅ Became Eligible (3):
-• 0x1234...5678 (grace → eligible)
-• 0xabcd...ef01 (ineligible → eligible)
-• 0x9876...5432 (grace → eligible)
+📊 Dashboard Stats:
+• Total Indexers: 150
+• Eligible: 142 ✅
+• Grace Period: 5 ⚠️
+• Ineligible: 3 ❌
 
-⚠️ Entered Grace Period (2):
-• 0x5555...6666 (eligible → grace)
-  Expires: 5-Nov-2025 at 19:25:55 UTC
-• 0x7777...8888 (eligible → grace)
+📝 Status Changes Detected:
 
-📄 Full Report
+0x1234567890abcdef1234567890abcdef12345678
+eligible → grace period ⚠️
+
+🔍 [View Full Dashboard](http://dashboards.thegraph.foundation/reo/)
 ```
+Only the indexers you're watching appear in status changes.
 
 ### Setup Telegram Bot
 
