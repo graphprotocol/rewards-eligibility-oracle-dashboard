@@ -123,13 +123,15 @@ def add_subscriber(chat_id, username):
 
 
 def remove_subscriber(chat_id):
-    """Remove a subscriber (set to inactive)."""
+    """Remove a subscriber (set to inactive and clear watched indexers)."""
     data = load_subscribers()
     
     for sub in data.get("subscribers", []):
         if sub.get("chat_id") == chat_id and sub.get("active", False):
             sub["active"] = False
             sub["unsubscribed_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            # Clear watched indexers list when unsubscribing
+            sub["watched_indexers"] = []
             data["stats"]["total_subscribers"] = sum(1 for s in data["subscribers"] if s.get("active", False))
             save_subscribers(data)
             return True
@@ -220,7 +222,7 @@ This bot sends you real-time alerts about:
 
 **Available Commands:**
 /subscribe - Subscribe to all notifications
-/unsubscribe - Stop receiving notifications
+/unsubscribe - Stop receiving all notifications
 /watch <address> - Watch a specific indexer
 /unwatch <address> - Stop watching an indexer
 /watchlist - Show your watched indexers
@@ -297,7 +299,8 @@ async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Unsubscribed: {chat_id} (@{username})")
         await update.message.reply_text(
             "👋 **Successfully unsubscribed!**\n\n"
-            "You will no longer receive notifications.\n\n"
+            "You will no longer receive any notifications.\n"
+            "Your watch list has been cleared.\n\n"
             "You can subscribe again anytime using /subscribe.",
             parse_mode='Markdown'
         )
@@ -543,7 +546,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 /start - Welcome message and introduction
 /subscribe - Subscribe to all notifications
-/unsubscribe - Stop receiving notifications
+/unsubscribe - Stop receiving all notifications
 /watch <address> - Watch a specific indexer
 /unwatch <address> - Stop watching an indexer
 /watchlist - Show your watched indexers
