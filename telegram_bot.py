@@ -570,9 +570,8 @@ Use `/watch` to monitor only specific indexers you care about.
 {DASHBOARD_URL}
 
 *About GIP-0079:*
-This bot monitors the Indexer Rewards Eligibility Oracle that tracks which indexers are eligible for rewards based on their service quality.
-
-Need help? Check the full documentation at the dashboard link above.
+This bot monitors the Indexer Rewards Eligibility Oracle that tracks which indexers are eligible for rewards based on their service quality:
+https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734
 """
     
     await update.message.reply_text(help_text, parse_mode='Markdown')
