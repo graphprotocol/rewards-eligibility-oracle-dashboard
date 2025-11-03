@@ -546,6 +546,23 @@ Or view count:
 cat /home/graph/ftpbox/reo/subscribers_telegram.json | grep '"active": true' | wc -l
 ```
 
+### Send Announcements
+
+When you add new features, you can notify all existing subscribers using the announcement script:
+
+```bash
+cd /home/graph/ftpbox/reo
+python3 announce_update.py
+```
+
+The script will:
+1. Show how many subscribers will receive the message
+2. Ask for confirmation
+3. Send the announcement to all active subscribers
+4. Show success/failure statistics
+
+**Note:** Edit `announce_update.py` to customize the announcement message before sending.
+
 ---
 
 ## User Commands
