@@ -123,9 +123,9 @@ def get_last_transaction(contract_address: str, api_key: str) -> Optional[dict]:
         return None
 
 
-def get_last_transaction_via_quicknode(contract_address: str, quicknode_url: str) -> Optional[dict]:
+def get_last_transaction_via_rpc(contract_address: str, rpc_endpoint: str) -> Optional[dict]:
     """
-    Get the last transaction touching the contract using a QuickNode RPC endpoint.
+    Get the last transaction touching the contract using an RPC endpoint.
     Strategy: Scan recent blocks and find transactions where 'to' == contract address.
     Skips eth_getLogs entirely as it causes 413 errors on contracts with many events.
     Returns a dict with 'hash', 'blockNumber' (as decimal string), and 'timeStamp' (as decimal string) or None.
@@ -133,18 +133,18 @@ def get_last_transaction_via_quicknode(contract_address: str, quicknode_url: str
     def rpc_call(method: str, params: list) -> Optional[dict]:
         try:
             response = requests.post(
-                quicknode_url,
+                rpc_endpoint,
                 json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
                 timeout=15,
             )
             response.raise_for_status()
             data = response.json()
             if isinstance(data, dict) and data.get("error"):
-                print(f"QuickNode RPC error for {method}: {data['error']}")
+                print(f"RPC error for {method}: {data['error']}")
                 return None
             return data.get("result")
         except Exception as e:
-            print(f"QuickNode RPC exception for {method}: {e}")
+            print(f"RPC exception for {method}: {e}")
             return None
 
     def hex_to_dec_str(hex_str: Optional[str]) -> str:
@@ -193,17 +193,17 @@ def get_last_transaction_via_quicknode(contract_address: str, quicknode_url: str
         print(f"No transactions found in last {scan_window} blocks")
         return None
     except Exception as e:
-        print(f"Error in get_last_transaction_via_quicknode: {e}")
+        print(f"Error in get_last_transaction_via_rpc: {e}")
         return None
 
 
-def get_oracle_update_time(contract_address: str, quicknode_url: str) -> Optional[int]:
+def get_oracle_update_time(contract_address: str, rpc_endpoint: str) -> Optional[int]:
     """
     Get the last oracle update time from the contract by calling getLastOracleUpdateTime().
     
     Args:
         contract_address: The contract address
-        quicknode_url: QuickNode RPC endpoint URL
+        rpc_endpoint: RPC endpoint URL
         
     Returns:
         Unix timestamp of last oracle update or None if error
@@ -223,7 +223,7 @@ def get_oracle_update_time(contract_address: str, quicknode_url: str) -> Optiona
             'id': 1
         }
         
-        response = requests.post(quicknode_url, json=payload, timeout=10)
+        response = requests.post(rpc_endpoint, json=payload, timeout=10)
         result = response.json()
         
         if 'result' in result and result['result'] != '0x':
@@ -239,13 +239,13 @@ def get_oracle_update_time(contract_address: str, quicknode_url: str) -> Optiona
         return None
 
 
-def get_eligibility_period(contract_address: str, quicknode_url: str) -> Optional[int]:
+def get_eligibility_period(contract_address: str, rpc_endpoint: str) -> Optional[int]:
     """
     Get the eligibility period from the contract by calling getEligibilityPeriod().
     
     Args:
         contract_address: The contract address
-        quicknode_url: QuickNode RPC endpoint URL
+        rpc_endpoint: RPC endpoint URL
         
     Returns:
         Eligibility period in seconds or None if error
@@ -265,7 +265,7 @@ def get_eligibility_period(contract_address: str, quicknode_url: str) -> Optiona
             'id': 1
         }
         
-        response = requests.post(quicknode_url, json=payload, timeout=10)
+        response = requests.post(rpc_endpoint, json=payload, timeout=10)
         result = response.json()
         
         if 'result' in result and result['result'] != '0x':
@@ -345,7 +345,7 @@ def load_ens_cache(cache_file: str = 'ens_resolution.json') -> Optional[dict]:
         return None
 
 
-def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexers.json', use_cached_ens: bool = False, contract_address: Optional[str] = None, quicknode_url: Optional[str] = None) -> bool:
+def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexers.json', use_cached_ens: bool = False, contract_address: Optional[str] = None, rpc_endpoint: Optional[str] = None) -> bool:
     """
     Retrieve the list of active indexers with self stake > 0 from The Graph's network subgraph.
     ENS resolution can be cached or fetched from subgraph based on use_cached_ens parameter.
@@ -358,7 +358,7 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
         output_file: Path to the output file (default: active_indexers.json)
         use_cached_ens: If True, use cached ENS data; if False, fetch from subgraph
         contract_address: The contract address to query oracle update time
-        quicknode_url: QuickNode RPC endpoint URL
+        rpc_endpoint: RPC endpoint URL
         
     Returns:
         True if successful, False otherwise
@@ -490,11 +490,11 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
         # Get oracle update time and eligibility period from contract if available
         last_oracle_update_time = None
         eligibility_period = None
-        if contract_address and quicknode_url:
+        if contract_address and rpc_endpoint:
             print(f"Fetching last oracle update time from contract...")
-            last_oracle_update_time = get_oracle_update_time(contract_address, quicknode_url)
+            last_oracle_update_time = get_oracle_update_time(contract_address, rpc_endpoint)
             print(f"Fetching eligibility period from contract...")
-            eligibility_period = get_eligibility_period(contract_address, quicknode_url)
+            eligibility_period = get_eligibility_period(contract_address, rpc_endpoint)
         
         output_data = {
             "metadata": {
@@ -545,7 +545,7 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
         return False
 
 
-def checkEligibility(contract_address: str, quicknode_url: str, input_file: str = 'active_indexers.json') -> bool:
+def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str = 'active_indexers.json') -> bool:
     """
     Check eligibility for each indexer using a two-pass approach:
     1. First pass: Call isEligible(address) for all indexers and store the result
@@ -556,7 +556,7 @@ def checkEligibility(contract_address: str, quicknode_url: str, input_file: str 
     
     Args:
         contract_address: The contract address (0x9BED32d2b562043a426376b99d289fE821f5b04E)
-        quicknode_url: QuickNode RPC endpoint URL
+        rpc_endpoint: RPC endpoint URL
         input_file: Path to the active_indexers.json file
         
     Returns:
@@ -615,7 +615,7 @@ def checkEligibility(contract_address: str, quicknode_url: str, input_file: str 
                     ]
                 }
                 
-                response = requests.post(quicknode_url, json=payload, timeout=10)
+                response = requests.post(rpc_endpoint, json=payload, timeout=10)
                 response.raise_for_status()
                 
                 result = response.json()
@@ -683,7 +683,7 @@ def checkEligibility(contract_address: str, quicknode_url: str, input_file: str 
                     ]
                 }
                 
-                response = requests.post(quicknode_url, json=payload, timeout=10)
+                response = requests.post(rpc_endpoint, json=payload, timeout=10)
                 response.raise_for_status()
                 
                 result = response.json()
@@ -1076,7 +1076,7 @@ def renderIndexerTable(json_file: str = 'active_indexers.json') -> List[dict]:
         return []
 
 
-def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: str, api_key: Optional[str] = None, quicknode_url: Optional[str] = None) -> str:
+def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: str, api_key: Optional[str] = None, rpc_endpoint: Optional[str] = None) -> str:
     """
     Generate the HTML dashboard content.
     
@@ -1101,9 +1101,9 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
     # First, try to load from local JSON file
     last_transaction = get_last_transaction_from_json()
     
-    # If no local data, try QuickNode if available
-    if not last_transaction and quicknode_url:
-        last_transaction = get_last_transaction_via_quicknode(contract_address, quicknode_url)
+    # If no local data, try RPC endpoint if available
+    if not last_transaction and rpc_endpoint:
+        last_transaction = get_last_transaction_via_rpc(contract_address, rpc_endpoint)
     
     # Final fallback to Arbiscan API
     if not last_transaction:
@@ -1116,14 +1116,14 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
     # Fetch oracle update time from contract
     print("Fetching oracle update time from contract...")
     oracle_update_time: Optional[int] = None
-    if quicknode_url:
-        oracle_update_time = get_oracle_update_time(contract_address, quicknode_url)
+    if rpc_endpoint:
+        oracle_update_time = get_oracle_update_time(contract_address, rpc_endpoint)
     
     # Fetch eligibility period from contract
     print("Fetching eligibility period from contract...")
     eligibility_period: Optional[int] = None
-    if quicknode_url:
-        eligibility_period = get_eligibility_period(contract_address, quicknode_url)
+    if rpc_endpoint:
+        eligibility_period = get_eligibility_period(contract_address, rpc_endpoint)
     
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -2328,7 +2328,7 @@ def main():
     use_cached_ens = os.getenv("USE_CACHED_ENS", "N").upper() == "Y"
     contract_address = os.getenv("CONTRACT_ADDRESS")
     api_key = os.getenv("ARBISCAN_API_KEY")
-    quicknode_url = os.getenv("QUICK_NODE")
+    rpc_endpoint = os.getenv("RPC_ENDPOINT")
     
     # Retrieve active indexers by querying network subgraph
     if graph_api_key and graph_api_key != "your_graph_api_key_here":
@@ -2342,7 +2342,7 @@ def main():
             print("   Fetching fresh ENS data from subgraph")
         print("=" * 60)
         print()
-        retrieveActiveIndexers(graph_api_key, use_cached_ens=use_cached_ens, contract_address=contract_address, quicknode_url=quicknode_url)
+        retrieveActiveIndexers(graph_api_key, use_cached_ens=use_cached_ens, contract_address=contract_address, rpc_endpoint=rpc_endpoint)
         print()
     else:
         print("⚠ GRAPH_API_KEY not set, skipping active indexers retrieval")
@@ -2363,8 +2363,8 @@ def main():
         missing_vars.append("CONTRACT_ADDRESS")
     if not api_key:
         missing_vars.append("ARBISCAN_API_KEY")
-    if not quicknode_url:
-        missing_vars.append("QUICK_NODE")
+    if not rpc_endpoint:
+        missing_vars.append("RPC_ENDPOINT")
     
     if missing_vars:
         print("❌ Error: Required environment variables are missing:")
@@ -2379,7 +2379,7 @@ def main():
     print()
     
     # Check eligibility for each indexer by calling the contract
-    checkEligibility(contract_address, quicknode_url)
+    checkEligibility(contract_address, rpc_endpoint)
     print()
     
     # Update status change dates by comparing with previous run
@@ -2403,7 +2403,7 @@ def main():
         print("ℹ️ Telegram notifications disabled (module not available)")
         print()
     
-    html_content = generate_html_dashboard(indexers, contract_address=contract_address, api_key=api_key, quicknode_url=quicknode_url)
+    html_content = generate_html_dashboard(indexers, contract_address=contract_address, api_key=api_key, rpc_endpoint=rpc_endpoint)
     
     # Write to index.html
     with open('index.html', 'w', encoding='utf-8') as file:

@@ -58,7 +58,7 @@ This project includes comprehensive documentation:
   - **Grace Period**: Indexers in 14-day grace period with expiration date (yellow badge)
   - **Ineligible**: Indexers who lost eligibility (red badge)
 - 🔍 **Real-time Search**: Filter indexers by address or ENS name
-- 🔗 **Blockchain Integration**: Fetches live data from Arbitrum Sepolia via QuickNode RPC
+- 🔗 **Blockchain Integration**: Fetches live data from Arbitrum Sepolia via RPC endpoint
 - ⏰ **Oracle Tracking**: Displays last oracle update time and 14-day eligibility period from contract
 - ⏳ **Grace Period Monitoring**: Shows when grace period expires for indexers in transition
 - 📱 **Responsive Design**: Mobile-friendly dark theme UI with collapsible sections
@@ -189,8 +189,8 @@ The script tries multiple methods to fetch the last transaction data (in priorit
 1. **`get_last_transaction_from_json()`**: 
    - Reads from local `last_transaction.json` file (fastest, offline-capable)
    
-2. **`get_last_transaction_via_quicknode()`**: 
-   - Scans recent blocks via QuickNode RPC endpoint
+2. **`get_last_transaction_via_rpc()`**: 
+   - Scans recent blocks via RPC endpoint
    - Finds the most recent transaction to the contract address
    
 3. **`get_last_transaction()`**: 
@@ -513,7 +513,7 @@ The script reads configuration from a `.env` file in the project root.
    ```bash
    CONTRACT_ADDRESS=0x9BED32d2b562043a426376b99d289fE821f5b04E
    ARBISCAN_API_KEY=your_arbiscan_api_key
-   QUICK_NODE=your_quicknode_rpc_url
+   RPC_ENDPOINT=your_rpc_endpoint_url
    GRAPH_API_KEY=your_graph_api_key
    USE_CACHED_ENS=N
    ```
@@ -575,10 +575,15 @@ All configuration is managed through environment variables in the `.env` file:
 - **Purpose**: Fetches transaction data from Arbiscan API
 - **Get yours**: [Arbiscan API Keys](https://arbiscan.io/myapikey)
 
-### QuickNode RPC Endpoint
-- **Variable**: `QUICK_NODE`
+### RPC Endpoint
+- **Variable**: `RPC_ENDPOINT`
 - **Purpose**: Connects to Arbitrum Sepolia for real-time blockchain data
-- **Get yours**: [QuickNode](https://quicknode.com)
+- **Supported Providers**: Any Ethereum RPC provider (Alchemy, Infura, QuickNode, Ankr, etc.)
+- **Get yours**: 
+  - [QuickNode](https://quicknode.com)
+  - [Alchemy](https://alchemy.com)
+  - [Infura](https://infura.io)
+  - [Ankr](https://ankr.com)
 
 ### The Graph API Key
 - **Variable**: `GRAPH_API_KEY`
@@ -852,7 +857,7 @@ When fetching transactions, the script scans the last 100 blocks to find the mos
 ## Error Handling
 
 The script includes robust error handling with **no mock data**:
-- Falls back through multiple data sources (JSON → QuickNode → Arbiscan)
+- Falls back through multiple data sources (JSON → RPC endpoint → Arbiscan)
 - Prints informative console messages for debugging
 - Gracefully handles missing data without using fake/mock values
 - Displays clear error messages in the dashboard UI when data is unavailable:
