@@ -540,7 +540,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity_logger.info(f"HELP_VIEW - Chat ID: {chat_id}, Username: @{username}")
     
     help_text = f"""
-📖 **REO Dashboard Bot - Help**
+**📖 REO Dashboard Bot - Help**
 
 **Available Commands:**
 

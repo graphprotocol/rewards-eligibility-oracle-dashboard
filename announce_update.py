@@ -21,7 +21,7 @@ DASHBOARD_URL = 'http://dashboards.thegraph.foundation/reo/'
 
 # Announcement message
 ANNOUNCEMENT_MESSAGE = """
-🎉 **New Features Available!**
+**🎉 New Features Available!**
 
 Great news! The REO Dashboard bot now supports **indexer-specific subscriptions**!
 
