@@ -298,7 +298,7 @@ async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activity_logger.info(f"UNSUBSCRIBED 👋 - Chat ID: {chat_id}, Username: @{username}, Name: {full_name}")
         logger.info(f"Unsubscribed: {chat_id} (@{username})")
         await update.message.reply_text(
-            "👋 **Successfully unsubscribed!**\n\n"
+            "👋 *Successfully unsubscribed!*\n\n"
             "You will no longer receive any notifications.\n"
             "Your watch list has been cleared.\n\n"
             "You can subscribe again anytime using /subscribe.",
@@ -326,7 +326,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 subscribed_at = sub.get("subscribed_at", "Unknown")
                 activity_logger.info(f"STATUS_CHECK (Subscribed) - Chat ID: {chat_id}, Username: @{username}, Since: {subscribed_at}")
                 await update.message.reply_text(
-                    f"✅ **Subscription Status: Active**\n\n"
+                    f"✅ *Subscription Status: Active*\n\n"
                     f"👤 Username: @{username or 'Unknown'}\n"
                     f"📅 Subscribed: {subscribed_at}\n"
                     f"🔔 Receiving: Oracle & Status updates\n\n"
@@ -337,7 +337,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         activity_logger.info(f"STATUS_CHECK (Not subscribed) - Chat ID: {chat_id}, Username: @{username}")
         await update.message.reply_text(
-            "❌ **Subscription Status: Not Active**\n\n"
+            "❌ *Subscription Status: Not Active*\n\n"
             "Use /subscribe to start receiving notifications.",
             parse_mode='Markdown'
         )
