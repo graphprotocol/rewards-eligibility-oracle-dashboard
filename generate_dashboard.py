@@ -727,12 +727,14 @@ def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str =
         for indexer in indexers:
             eligibility_renewal_time = indexer.get("eligibility_renewal_time", 0)
             
-            # Format eligibility_renewal_time to readable format
+            # Format eligibility_renewal_time to readable format (both short and full)
             if eligibility_renewal_time > 0:
                 dt = datetime.fromtimestamp(eligibility_renewal_time, tz=timezone.utc)
                 indexer["eligibility_renewal_time_readable"] = dt.strftime("%-d-%b-%Y at %H:%M:%S UTC")
+                indexer["eligibility_renewal_time_short"] = dt.strftime("%-d-%b-%Y")
             else:
                 indexer["eligibility_renewal_time_readable"] = "Never"
+                indexer["eligibility_renewal_time_short"] = "Never"
             
             # Set status based on comparison with last_oracle_update_time and grace period
             if last_oracle_update_time and eligibility_renewal_time == last_oracle_update_time:
@@ -740,6 +742,7 @@ def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str =
                 indexer["status"] = "eligible"
                 indexer["eligible_until"] = ""
                 indexer["eligible_until_readable"] = ""
+                indexer["eligible_until_short"] = ""
                 eligible_status_count += 1
             elif eligibility_renewal_time != last_oracle_update_time and eligibility_period and eligibility_renewal_time > 0:
                 # Check if in grace period
@@ -750,16 +753,19 @@ def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str =
                     # Format: 2-Nov-2025 at 19:25:55 UTC (day without leading zero)
                     dt = datetime.fromtimestamp(grace_period_end, tz=timezone.utc)
                     indexer["eligible_until_readable"] = dt.strftime("%-d-%b-%Y at %H:%M:%S UTC")
+                    indexer["eligible_until_short"] = dt.strftime("%-d-%b-%Y")
                     grace_status_count += 1
                 else:
                     indexer["status"] = "ineligible"
                     indexer["eligible_until"] = ""
                     indexer["eligible_until_readable"] = ""
+                    indexer["eligible_until_short"] = ""
                     ineligible_status_count += 1
             else:
                 indexer["status"] = "ineligible"
                 indexer["eligible_until"] = ""
                 indexer["eligible_until_readable"] = ""
+                indexer["eligible_until_short"] = ""
                 ineligible_status_count += 1
         
         print(f"✓ Pass 3 complete:")
@@ -1533,6 +1539,45 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             color: #F8F6FF;
         }}
         
+        /* Date hover tooltip styles */
+        .date-hover {{
+            position: relative;
+            cursor: help;
+        }}
+        
+        .date-hover[data-full-date]:hover::after {{
+            content: attr(data-full-date);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: #1a1825;
+            color: #F8F6FF;
+            font-size: 12px;
+            font-weight: 400;
+            white-space: nowrap;
+            border-radius: 6px;
+            border: 1px solid #9CA3AF;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            pointer-events: none;
+        }}
+        
+        .date-hover[data-full-date]:hover::before {{
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 2px;
+            border: 6px solid transparent;
+            border-top-color: #9CA3AF;
+            z-index: 1000;
+            pointer-events: none;
+        }}
+        
         tr:hover {{
             background-color: #1a1825;
         }}
@@ -1918,7 +1963,12 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         ens_display = ens_name if ens_name else "No ENS"
         ens_class = "ens-name" if ens_name else "empty-ens"
         explorer_url = f"https://thegraph.com/explorer/profile/{address}?view=Indexing&chain=arbitrum-one"
+        
+        # Get date formats
+        eligibility_renewal_time_short = indexer.get("eligibility_renewal_time_short", "Never")
         eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
+        eligible_until_short = indexer.get("eligible_until_short", "")
+        eligible_until_readable = indexer.get("eligible_until_readable", "")
         
         # Set status badge based on eligibility
         if is_eligible:
@@ -1926,12 +1976,24 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         else:
             status_badge = '<span class="legend-badge ineligible">ineligible</span>'
         
+        # Format Last Renewed cell with hover tooltip
+        if eligibility_renewal_time_short == "Never":
+            last_renewed_cell = eligibility_renewal_time_short
+        else:
+            last_renewed_cell = f'<span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span>'
+        
+        # Format Eligible Until cell with hover tooltip
+        if eligible_until_short:
+            eligible_until_cell = f'<span class="date-hover" data-full-date="{eligible_until_readable}">{eligible_until_short}</span>'
+        else:
+            eligible_until_cell = ""
+        
         html_content += f"""                    <tr>
                         <td><a href="{explorer_url}" target="_blank" class="address-link"><span class="address">{address}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a></td>
                         <td><span class="{ens_class}">{ens_display}</span></td>
                         <td>{status_badge}</td>
-                        <td>{eligibility_renewal_time_readable}</td>
-                        <td></td>
+                        <td>{last_renewed_cell}</td>
+                        <td>{eligible_until_cell}</td>
                     </tr>
 """
 
@@ -1965,7 +2027,9 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         address = indexer.get("address", "")
         ens_name = indexer.get("ens_name", "")
         status = indexer.get("status", "ineligible")
+        eligibility_renewal_time_short = indexer.get("eligibility_renewal_time_short", "Never")
         eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
+        eligible_until_short = indexer.get("eligible_until_short", "")
         eligible_until_readable = indexer.get("eligible_until_readable", "")
         
         # Set status badge based on status
@@ -1976,7 +2040,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         else:
             status_badge = '<span class="legend-badge ineligible">ineligible</span>'
         
-        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_readable}", "{eligible_until_readable}", "{status}"],
+        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_short}", "{eligibility_renewal_time_readable}", "{eligible_until_short}", "{eligible_until_readable}", "{status}"],
 """
 
     html_content += """        ];
@@ -2001,8 +2065,8 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                 const matchesSearch = row[0].toLowerCase().includes(searchTerm) || 
                                      row[1].toLowerCase().includes(searchTerm);
                 
-                // Check status filter (row[5] is the status string)
-                const matchesFilter = !activeFilter || row[5] === activeFilter;
+                // Check status filter (row[7] is the status string)
+                const matchesFilter = !activeFilter || row[7] === activeFilter;
                 
                 return matchesSearch && matchesFilter;
             });
@@ -2091,9 +2155,9 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             currentData.sort((a, b) => {
                 // Special handling when sorting by status column (index 2)
                 if (column === 2) {
-                    // Use the plain text status (row[5]) for sorting
-                    const aStatus = a[5].toLowerCase();
-                    const bStatus = b[5].toLowerCase();
+                    // Use the plain text status (row[7]) for sorting
+                    const aStatus = a[7].toLowerCase();
+                    const bStatus = b[7].toLowerCase();
                     
                     if (aStatus < bStatus) return sortDirection === 'asc' ? -1 : 1;
                     if (aStatus > bStatus) return sortDirection === 'asc' ? 1 : -1;
@@ -2109,8 +2173,8 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                     return 3;
                 };
                 
-                const aStatusPriority = getStatusPriority(a[5]);
-                const bStatusPriority = getStatusPriority(b[5]);
+                const aStatusPriority = getStatusPriority(a[7]);
+                const bStatusPriority = getStatusPriority(b[7]);
                 
                 // If status priority differs, sort by priority
                 if (aStatusPriority !== bStatusPriority) {
@@ -2137,18 +2201,32 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         function renderTable() {
             tableBody.innerHTML = '';
             currentData.forEach((row, index) => {
-                const [address, ensName, status, lastRenewed, eligibleUntil, statusString] = row;
+                const [address, ensName, status, lastRenewedShort, lastRenewedFull, eligibleUntilShort, eligibleUntilFull, statusString] = row;
                 const ensDisplay = ensName || 'No ENS';
                 const ensClass = ensName ? 'ens-name' : 'empty-ens';
                 const explorerUrl = `https://thegraph.com/explorer/profile/${address}?view=Indexing&chain=arbitrum-one`;
+                
+                // Format Last Renewed cell with hover tooltip
+                let lastRenewedCell;
+                if (lastRenewedShort === 'Never') {
+                    lastRenewedCell = lastRenewedShort;
+                } else {
+                    lastRenewedCell = `<span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span>`;
+                }
+                
+                // Format Eligible Until cell with hover tooltip
+                let eligibleUntilCell = '';
+                if (eligibleUntilShort) {
+                    eligibleUntilCell = `<span class="date-hover" data-full-date="${eligibleUntilFull}">${eligibleUntilShort}</span>`;
+                }
                 
                 const rowHTML = `
                     <tr>
                         <td><a href="${explorerUrl}" target="_blank" class="address-link"><span class="address">${address}</span></a></td>
                         <td><span class="${ensClass}">${ensDisplay}</span></td>
                         <td>${status}</td>
-                        <td>${lastRenewed}</td>
-                        <td>${eligibleUntil}</td>
+                        <td>${lastRenewedCell}</td>
+                        <td>${eligibleUntilCell}</td>
                     </tr>
                 `;
                 tableBody.innerHTML += rowHTML;

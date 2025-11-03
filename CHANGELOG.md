@@ -11,13 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New "Last Renewed" column in dashboard table showing when each indexer's eligibility was last renewed
-- Displays `eligibility_renewal_time` in human-readable format (e.g., "16-Nov-2025 at 13:31:42 UTC")
+- CSS-based hover tooltips for date columns showing full timestamp on hover
+- Short date format display (e.g., "2-Nov-2025") with full date/time on hover (e.g., "2-Nov-2025 at 13:31:42 UTC")
 - Shows "Never" for indexers that have never been eligible
 - Column positioned between "Status" and "Eligible Until" for better readability
 
 ### Changed
 - Updated table structure to accommodate new column
 - Enhanced indexer eligibility tracking with renewal timestamp visibility
+- Both "Last Renewed" and "Eligible Until" columns now use short date format with CSS hover tooltips
+- Improved page load performance by using CSS tooltips instead of JavaScript
 
 ---
 
