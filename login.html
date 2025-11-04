@@ -403,7 +403,7 @@
                 if (data.success) {
                     showMessage('Login successful! Redirecting...', 'success');
                     setTimeout(() => {
-                        window.location.href = '/';
+                        window.location.reload();
                     }, 1000);
                 } else {
                     showMessage(data.message, 'error');
