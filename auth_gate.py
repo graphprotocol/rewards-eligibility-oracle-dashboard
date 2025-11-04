@@ -280,6 +280,11 @@ def serve_static(filepath):
     """Serve static files (images, etc.) from web root"""
     return static_file(filepath, root='/var/www/iproot/reo')
 
+@app.route('/<filename:re:.*\.(png|jpg|jpeg|gif|ico|css|js)>')
+def serve_assets(filename):
+    """Serve image and asset files directly"""
+    return static_file(filename, root='/var/www/iproot/reo')
+
 @app.post('/request-otp')
 def request_otp():
     """Request OTP code via email"""
