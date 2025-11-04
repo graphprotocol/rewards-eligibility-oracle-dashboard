@@ -12,3 +12,6 @@ pycryptodome>=3.19.0
 # Telegram Bot API for notifications
 python-telegram-bot==20.7
 
+# Web server for authentication gateway
+bottle>=0.12.25
+

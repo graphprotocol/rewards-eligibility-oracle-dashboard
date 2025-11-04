@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.14] - 2025-11-04
+
+### Added
+- **Authentication System** - Optional email-based OTP authentication for dashboard access control
+- New `auth_gate.py` - Lightweight Bottle.py web server that acts as authentication gateway
+- New `login.html` - Beautiful, responsive login page matching dashboard design
+- New `allowed_people.txt` - Email whitelist supporting exact emails and wildcard domains (e.g., `*@domain.com`)
+- **AUTHENTICATION.md** - Comprehensive documentation covering:
+  - Architecture and how the system works
+  - Installation and configuration steps
+  - Production deployment with systemd
+  - SMTP/email setup for multiple providers (Gmail, SendGrid, AWS SES, Mailgun)
+  - Security features and best practices
+  - Monitoring, logging, and troubleshooting
+- Email whitelist with wildcard domain support (`*@thegraph.foundation`)
+- 6-digit OTP codes with 10-minute expiry
+- 7-day session cookies with tamper-proof signatures
+- Rate limiting (5 OTP requests per hour per email)
+- Beautiful HTML email templates for OTP delivery
+- Audit logging of all authentication events
+- Health check endpoint (`/health`) for monitoring
+- Logout functionality with session invalidation
+- Example configuration files: `allowed_people.txt.example`
+
+### Changed
+- Updated `README.md` to reference AUTHENTICATION.md in documentation section
+- Updated file structure section to include authentication components
+- Updated `.gitignore` to protect `allowed_people.txt` (contains authorized emails)
+- Updated `env.example` with authentication configuration variables
+- Updated `requirements.txt` to include `bottle>=0.12.25` web framework
+
+### Security
+- HTTP-only, Secure, SameSite=Strict cookies prevent XSS and CSRF attacks
+- HMAC-SHA256 signed session tokens prevent tampering
+- In-memory OTP storage (cleared on restart for security)
+- Rate limiting prevents OTP spam and brute force attempts
+- Email whitelist prevents unauthorized access attempts
+- Automatic cleanup of expired OTPs and rate limit entries
+
+### Technical Details
+- Zero changes to existing `generate_dashboard.py` or `index.html` (completely non-invasive)
+- Auth gateway serves as gatekeeper - checks cookies before serving dashboard
+- Supports any SMTP provider (Gmail, SendGrid, AWS SES, Mailgun, etc.)
+- Production-ready with systemd service configuration
+- Nginx reverse proxy compatible with SSL/TLS support
+
+---
+
 ## [0.0.13] - 2025-11-03
 
 ### Added

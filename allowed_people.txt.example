@@ -1,0 +1,20 @@
+# Email Whitelist for REO Dashboard Access
+# ==========================================
+# Add one email or pattern per line
+# Supports exact emails and wildcard domains
+#
+# Examples:
+#   yaniv@edgeandnode.com          - Specific email
+#   *@thegraph.foundation           - All emails from domain
+#   *@edgeandnode.com               - All emails from domain
+#
+# Lines starting with # are comments and will be ignored
+# Empty lines are also ignored
+#
+# Add authorized emails below:
+
+# Example entries (remove # to activate):
+# yaniv@edgeandnode.com
+# *@thegraph.foundation
+# *@edgeandnode.com
+

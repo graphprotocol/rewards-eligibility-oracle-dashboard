@@ -49,3 +49,6 @@ activity_log_indexers_status_changes.json
 subscribers_telegram.json
 logs/
 cron.log
+
+# Authentication files (contains sensitive data)
+allowed_people.txt
