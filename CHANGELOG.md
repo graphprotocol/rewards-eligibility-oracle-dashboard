@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Email whitelist prevents unauthorized access attempts
 - Automatic cleanup of expired OTPs and rate limit entries
 
+### Fixed
+- Fixed redirect after successful OTP verification to stay in `/reo/` context (was redirecting to root `/`)
+- Fixed static asset serving - images (grt.png), CSS, and JS files now load correctly
+- JavaScript fetch URLs now use relative paths for proper proxy routing
+
 ### Technical Details
 - Zero changes to existing `generate_dashboard.py` or `index.html` (completely non-invasive)
 - Auth gateway serves as gatekeeper - checks cookies before serving dashboard
