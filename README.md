@@ -82,6 +82,13 @@ This project includes comprehensive documentation:
   - Error log analysis
   - Log rotation and maintenance
   
+- **[UTILS_COMMANDS.md](UTILS_COMMANDS.md)** - Utility Commands Reference
+  - Authentication gateway service management
+  - Telegram bot service commands
+  - Nginx configuration and restart commands
+  - Log viewing and troubleshooting
+  - Emergency recovery procedures
+  
 - **[activity_log_indexers_status_changes.json](activity_log_indexers_status_changes.json)** - Activity Log File
   - Cumulative history of all indexer status changes
   - Tracks status transitions over time (eligible ↔ grace ↔ ineligible)

@@ -424,12 +424,12 @@ if __name__ == '__main__':
         print()
     
     print("🚀 Starting server...")
-    print(f"   URL: http://localhost:8080")
+    print(f"   URL: http://localhost:8081")
     print(f"   Cookie expiry: {COOKIE_MAX_AGE // 86400} days")
     print(f"   OTP expiry: {OTP_EXPIRY // 60} minutes")
     print()
     print("Press Ctrl+C to stop")
     print("=" * 60)
     
-    app.run(host='0.0.0.0', port=8080, debug=False, reloader=False)
+    app.run(host='0.0.0.0', port=8081, debug=False, reloader=False)
 

@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Email whitelist prevents unauthorized access attempts
 - Automatic cleanup of expired OTPs and rate limit entries
 
+### Changed
+- **Authentication gateway now uses port 8081** instead of 8080 to avoid conflicts with other applications
+- Updated all documentation to reflect new port configuration
+
 ### Fixed
 - Fixed redirect after successful OTP verification to stay in `/reo/` context (was redirecting to root `/`)
 - Fixed static asset serving - images (grt.png), CSS, and JS files now load correctly
