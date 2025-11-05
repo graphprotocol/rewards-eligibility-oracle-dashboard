@@ -1,0 +1,9 @@
+# GRUMP Dashboard Authentication - Python Dependencies
+# ==================================================
+
+# Web framework for authentication gateway
+bottle>=0.12.25
+
+# Environment variable management
+python-dotenv>=1.0.0
+

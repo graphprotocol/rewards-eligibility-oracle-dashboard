@@ -1,4 +1,4 @@
-# Email Whitelist for REO Dashboard Access
+# Email Whitelist for GRUMP Dashboard Access
 # ==========================================
 # Add one email or pattern per line
 # Supports exact emails and wildcard domains

@@ -15,7 +15,7 @@ from typing import List, Tuple, Optional
 from dotenv import load_dotenv
 
 # Version of the dashboard generator
-VERSION = "0.0.13"
+VERSION = "0.0.14"
 
 # Import telegram notifier (will be skipped if module not available)
 try:

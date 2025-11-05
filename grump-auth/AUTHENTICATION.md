@@ -1,8 +1,8 @@
-# REO Dashboard Authentication System
+# GRUMP Dashboard Authentication System
 
 ## Overview
 
-The REO Dashboard uses a **lightweight email-based OTP (One-Time Password) authentication system** to control access. This gatekeeps access provides secure, token-free authentication without modifying the existing dashboard generation logic.
+The GRUMP Dashboard uses a **lightweight email-based OTP (One-Time Password) authentication system** to control access. This gatekeeps access provides secure, token-free authentication without modifying the existing dashboard generation logic.
 
 ## 🏗️ Architecture
 
@@ -11,7 +11,7 @@ User Request
      │
      ▼
 ┌─────────────────────┐
-│   auth_gate.py      │  ←── Bottle.py Web Server (Port 8080)
+│   auth_gate.py      │  ←── Bottle.py Web Server (Port 8081)
 │  (Auth Gateway)     │
 └──────────┬──────────┘
            │
@@ -79,18 +79,52 @@ index.html    login.html
 Add new dependencies to your environment:
 
 ```bash
-pip3 install bottle
+pip3 install bottle python-dotenv
 ```
 
-Or update `requirements.txt` and reinstall:
+Or add to `requirements.txt`:
+
+```txt
+bottle
+python-dotenv
+```
+
+### Step 2: Create Directory Structure
 
 ```bash
-pip3 install -r requirements.txt
+# Create config directory
+sudo mkdir -p /var/www/grump-config
+
+# Create logs directory
+sudo mkdir -p /var/www/iproot/grump/logs
+
+# Set permissions
+sudo chown -R www-data:www-data /var/www/grump-config
+sudo chown -R www-data:www-data /var/www/iproot/grump/logs
 ```
 
-### Step 2: Configure Email Sending
+### Step 3: Copy Files
 
-Add SMTP configuration to your `.env` file:
+```bash
+# Copy authentication files to config directory
+sudo cp auth_gate.py /var/www/grump-config/
+sudo cp allowed_people.txt /var/www/grump-config/
+
+# Copy login page to web root
+sudo cp login.html /var/www/iproot/grump/
+
+# Copy .env file
+sudo cp .env /var/www/grump-config/
+
+# Set permissions
+sudo chmod 600 /var/www/grump-config/.env
+sudo chmod 644 /var/www/grump-config/auth_gate.py
+sudo chmod 644 /var/www/grump-config/allowed_people.txt
+```
+
+### Step 4: Configure Email Sending
+
+Create or edit `/var/www/grump-config/.env`:
 
 ```bash
 # Authentication Configuration
@@ -104,7 +138,7 @@ SMTP_PASSWORD=your-app-password
 SMTP_FROM=your-email@gmail.com
 
 # Dashboard URL (for email links)
-DASHBOARD_URL=https://dashboards.thegraph.foundation/reo/
+DASHBOARD_URL=https://dashboards.thegraph.foundation/grump/
 ```
 
 #### Gmail Setup (Recommended)
@@ -140,9 +174,9 @@ SMTP_USER=postmaster@your-domain.mailgun.org
 SMTP_PASSWORD=your_mailgun_smtp_password
 ```
 
-### Step 3: Configure Email Whitelist
+### Step 5: Configure Email Whitelist
 
-Edit `allowed_people.txt` to add authorized emails:
+Edit `/var/www/grump-config/allowed_people.txt` to add authorized emails:
 
 ```bash
 # Individual emails
@@ -162,7 +196,7 @@ admin@example.com
 - Supports exact emails: `user@domain.com`
 - Supports wildcard domains: `*@domain.com`
 
-### Step 4: Generate Cookie Secret
+### Step 6: Generate Cookie Secret
 
 Generate a secure random secret for cookie signing:
 
@@ -172,24 +206,24 @@ python3 -c "import os; print(os.urandom(32).hex())"
 
 Copy the output and set it as `AUTH_COOKIE_SECRET` in `.env`.
 
-### Step 5: Test the System
+### Step 7: Test the System
 
 Run the authentication gateway:
 
 ```bash
-cd /home/graph/ftpbox/reo
+cd /var/www/grump-config
 python3 auth_gate.py
 ```
 
 You should see:
 ```
 ============================================================
-🔐 REO Dashboard Authentication Gateway
+🔐 GRUMP Dashboard Authentication Gateway
 ============================================================
 📧 Loaded 3 email patterns from whitelist
 
 🚀 Starting server...
-   URL: http://localhost:8080
+   URL: http://localhost:8081
    Cookie expiry: 7 days
    OTP expiry: 10 minutes
 
@@ -197,7 +231,7 @@ Press Ctrl+C to stop
 ============================================================
 ```
 
-Visit `http://localhost:8080` to test the login flow.
+Visit `http://localhost:8081` to test the login flow.
 
 ## 🚀 Deployment
 
@@ -208,28 +242,39 @@ Create a systemd service for the authentication gateway:
 #### 1. Create Service File
 
 ```bash
-sudo nano /etc/systemd/system/reo_auth.service
+sudo cp auth_gate.service /etc/systemd/system/grump_auth.service
 ```
 
-Add the following content:
+Or create it manually:
+
+```bash
+sudo nano /etc/systemd/system/grump_auth.service
+```
 
 ```ini
 [Unit]
-Description=REO Dashboard Authentication Gateway
+Description=GRUMP Dashboard Authentication Gateway
 After=network.target
 
 [Service]
 Type=simple
-User=graph
-WorkingDirectory=/home/graph/ftpbox/reo
-ExecStart=/usr/bin/python3 /home/graph/ftpbox/reo/auth_gate.py
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/grump-config
+Environment="PATH=/usr/bin:/usr/local/bin"
+ExecStart=/usr/bin/python3 /var/www/grump-config/auth_gate.py
 Restart=always
 RestartSec=10
-StandardOutput=append:/home/graph/ftpbox/reo/logs/auth_gateway.log
-StandardError=append:/home/graph/ftpbox/reo/logs/auth_gateway.log
+StandardOutput=append:/var/www/iproot/grump/logs/auth_gateway.log
+StandardError=append:/var/www/iproot/grump/logs/auth_gateway.log
 
-# Load environment variables
-EnvironmentFile=/home/graph/ftpbox/reo/.env
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/iproot/grump/logs
+ReadOnlyPaths=/var/www/grump-config
 
 [Install]
 WantedBy=multi-user.target
@@ -238,39 +283,36 @@ WantedBy=multi-user.target
 #### 2. Enable and Start Service
 
 ```bash
-# Create logs directory if it doesn't exist
-mkdir -p /home/graph/ftpbox/reo/logs
-
 # Reload systemd
 sudo systemctl daemon-reload
 
 # Enable service (start on boot)
-sudo systemctl enable reo_auth.service
+sudo systemctl enable grump_auth.service
 
 # Start service
-sudo systemctl start reo_auth.service
+sudo systemctl start grump_auth.service
 
 # Check status
-sudo systemctl status reo_auth.service
+sudo systemctl status grump_auth.service
 
 # View logs
-tail -f /home/graph/ftpbox/reo/logs/auth_gateway.log
+tail -f /var/www/iproot/grump/logs/auth_gateway.log
 ```
 
 #### 3. Management Commands
 
 ```bash
 # Restart after code changes
-sudo systemctl restart reo_auth.service
+sudo systemctl restart grump_auth.service
 
 # Stop service
-sudo systemctl stop reo_auth.service
+sudo systemctl stop grump_auth.service
 
 # View real-time logs
-sudo journalctl -u reo_auth.service -f
+sudo journalctl -u grump_auth.service -f
 
 # View recent logs
-sudo journalctl -u reo_auth.service -n 50
+sudo journalctl -u grump_auth.service -n 50
 ```
 
 ### Nginx Reverse Proxy (Recommended for Production)
@@ -295,15 +337,15 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/dashboards.thegraph.foundation/privkey.pem;
     
     # Proxy to auth gateway
-    location /reo/ {
-        proxy_pass http://127.0.0.1:8080/;
+    location /grump/ {
+        proxy_pass http://127.0.0.1:8081/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
         # Important: preserve cookies
-        proxy_cookie_path / /reo/;
+        proxy_cookie_path / /grump/;
     }
 }
 ```
@@ -331,7 +373,7 @@ sudo certbot renew --dry-run
 
 ### Login Flow
 
-1. **User visits dashboard** → `https://dashboards.thegraph.foundation/reo/`
+1. **User visits dashboard** → `https://dashboards.thegraph.foundation/grump/`
 
 2. **Auth gateway checks cookie**:
    - Valid cookie? → Serve `index.html` (dashboard)
@@ -451,6 +493,12 @@ RATE_LIMIT_WINDOW = 2 * 60 * 60  # 2 hours
 RATE_LIMIT_MAX_REQUESTS = 10  # 10 requests per window
 ```
 
+**Change Port:**
+```python
+# In auth_gate.py (last line)
+app.run(host='0.0.0.0', port=8082, debug=False, reloader=False)
+```
+
 **Customize Email Template:**
 Edit the `send_otp_email()` function in `auth_gate.py` to modify email content and styling.
 
@@ -461,10 +509,10 @@ Edit the `send_otp_email()` function in `auth_gate.py` to modify email content a
 All authentication events are logged to console/log file:
 
 ```
-✅ [2025-11-04 10:30:45 UTC] OTP_SENT: user@example.com - Code: 123456
-✅ [2025-11-04 10:32:18 UTC] LOGIN_SUCCESS: user@example.com - Session created
-❌ [2025-11-04 10:45:23 UTC] OTP_VERIFY: hacker@bad.com - Invalid code
-✅ [2025-11-04 18:22:09 UTC] LOGOUT: user@example.com - Session destroyed
+✅ [2025-11-05 10:30:45 UTC] OTP_SENT: user@example.com - Code: 123456
+✅ [2025-11-05 10:32:18 UTC] LOGIN_SUCCESS: user@example.com - Session created
+❌ [2025-11-05 10:45:23 UTC] OTP_VERIFY: hacker@bad.com - Invalid code
+✅ [2025-11-05 18:22:09 UTC] LOGOUT: user@example.com - Session destroyed
 ```
 
 ### Log Events
@@ -482,19 +530,19 @@ All authentication events are logged to console/log file:
 
 ```bash
 # Systemd service logs
-sudo journalctl -u reo_auth.service -f
+sudo journalctl -u grump_auth.service -f
 
-# Log file (if using systemd with log output)
-tail -f /home/graph/ftpbox/reo/logs/auth_gateway.log
+# Log file
+tail -f /var/www/iproot/grump/logs/auth_gateway.log
 
 # Search for specific email
-sudo journalctl -u reo_auth.service | grep "user@example.com"
+sudo journalctl -u grump_auth.service | grep "user@example.com"
 
 # Show only errors
-sudo journalctl -u reo_auth.service | grep "❌"
+sudo journalctl -u grump_auth.service | grep "❌"
 
 # Show login events
-sudo journalctl -u reo_auth.service | grep "LOGIN_SUCCESS"
+sudo journalctl -u grump_auth.service | grep "LOGIN_SUCCESS"
 ```
 
 ## 🐛 Troubleshooting
@@ -519,7 +567,7 @@ python3 -c "import smtplib; smtplib.SMTP('smtp.gmail.com', 587).starttls()"
 **Cause:** Email not in whitelist
 
 **Solutions:**
-- Add email to `allowed_people.txt`
+- Add email to `/var/www/grump-config/allowed_people.txt`
 - Check for typos in email address
 - Ensure whitelist file has correct format
 - Restart auth gateway after modifying whitelist
@@ -546,8 +594,8 @@ python3 -c "import smtplib; smtplib.SMTP('smtp.gmail.com', 587).starttls()"
 
 **Solutions:**
 ```bash
-# Check if port 8080 is in use
-sudo lsof -i :8080
+# Check if port 8081 is in use
+sudo lsof -i :8081
 
 # Kill process using port
 sudo kill -9 <PID>
@@ -556,13 +604,25 @@ sudo kill -9 <PID>
 pip3 list | grep bottle
 ```
 
+#### 6. Permission denied errors
+
+**Cause:** Incorrect file permissions
+
+**Solutions:**
+```bash
+# Fix permissions
+sudo chown -R www-data:www-data /var/www/grump-config
+sudo chown -R www-data:www-data /var/www/iproot/grump/logs
+sudo chmod 600 /var/www/grump-config/.env
+```
+
 ### Debug Mode
 
 Enable debug mode for detailed error messages:
 
 ```python
 # In auth_gate.py, change the last line:
-app.run(host='0.0.0.0', port=8080, debug=True, reloader=True)
+app.run(host='0.0.0.0', port=8081, debug=True, reloader=True)
 ```
 
 **⚠️ WARNING:** Only use debug mode during development. Disable for production!
@@ -576,7 +636,8 @@ app.run(host='0.0.0.0', port=8080, debug=True, reloader=True)
 - ✅ Regularly review `allowed_people.txt`
 - ✅ Monitor auth logs for suspicious activity
 - ✅ Keep whitelist file private (not in git)
-- ✅ Use firewall to restrict port 8080 access (only from Nginx)
+- ✅ Use firewall to restrict port 8081 access (only from Nginx)
+- ✅ Set restrictive file permissions on `.env` (600)
 
 ### DON'T:
 - ❌ Don't commit `.env` file to git
@@ -585,20 +646,21 @@ app.run(host='0.0.0.0', port=8080, debug=True, reloader=True)
 - ❌ Don't use debug mode in production
 - ❌ Don't ignore failed login attempts
 - ❌ Don't make whitelist file publicly accessible
+- ❌ Don't use weak or predictable secrets
 
 ## 📝 File Structure
 
 ```
-/home/graph/ftpbox/reo/
-├── auth_gate.py                 # NEW: Authentication gateway
-├── login.html                   # NEW: Login page
-├── allowed_people.txt           # NEW: Email whitelist
-├── generate_dashboard.py        # UNCHANGED: Dashboard generator
-├── index.html                   # UNCHANGED: Dashboard (auto-generated)
-├── active_indexers.json         # UNCHANGED: Dashboard data
-├── .env                         # UPDATED: Add auth config
+/var/www/grump-config/          # Config directory
+├── auth_gate.py                # Authentication gateway
+├── allowed_people.txt          # Email whitelist
+└── .env                        # Environment variables (SECRET!)
+
+/var/www/iproot/grump/          # Web root
+├── login.html                  # Login page
+├── index.html                  # Dashboard (auto-generated)
 └── logs/
-    └── auth_gateway.log         # NEW: Auth logs
+    └── auth_gateway.log        # Auth logs
 ```
 
 ## 🔄 Maintaining Your System
@@ -623,10 +685,10 @@ app.run(host='0.0.0.0', port=8080, debug=True, reloader=True)
 
 ```bash
 # Edit whitelist
-nano /home/graph/ftpbox/reo/allowed_people.txt
+sudo nano /var/www/grump-config/allowed_people.txt
 
-# Restart service (whitelist is loaded on each request, so this is optional)
-sudo systemctl restart reo_auth.service
+# Restart service (optional, whitelist reloads on each request)
+sudo systemctl restart grump_auth.service
 ```
 
 ### Rotating Cookie Secret
@@ -638,10 +700,10 @@ If you need to invalidate all sessions:
 python3 -c "import os; print(os.urandom(32).hex())"
 
 # Update .env
-nano /home/graph/ftpbox/reo/.env
+sudo nano /var/www/grump-config/.env
 
 # Restart service
-sudo systemctl restart reo_auth.service
+sudo systemctl restart grump_auth.service
 ```
 
 **⚠️ Note:** This will log out all users immediately.
@@ -650,7 +712,7 @@ sudo systemctl restart reo_auth.service
 
 If you encounter issues not covered in this guide:
 
-1. Check the logs: `sudo journalctl -u reo_auth.service -f`
+1. Check the logs: `sudo journalctl -u grump_auth.service -f`
 2. Verify configuration: Review `.env` and `allowed_people.txt`
 3. Test SMTP: Manually test email sending
 4. Review Nginx config: Ensure proper proxying
@@ -661,11 +723,11 @@ If you encounter issues not covered in this guide:
 - [Bottle.py Documentation](https://bottlepy.org/docs/dev/)
 - [Let's Encrypt SSL Guide](https://letsencrypt.org/getting-started/)
 - [Gmail App Passwords](https://support.google.com/accounts/answer/185833)
-- [GIP-0079 Proposal](https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734)
+- [The Graph Protocol](https://thegraph.com)
 
 ---
 
 **Version:** 1.0.0  
-**Last Updated:** November 4, 2025  
+**Last Updated:** November 5, 2025  
 **Author:** [@pdiomede](https://x.com/pdiomede)
 

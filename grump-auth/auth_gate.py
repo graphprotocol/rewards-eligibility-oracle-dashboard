@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-REO Dashboard Authentication Gateway
+GRUMP Dashboard Authentication Gateway
 ====================================
-Lightweight authentication layer for the REO Dashboard.
+Lightweight authentication layer for the GRUMP Dashboard.
 Uses email-based OTP authentication with 7-day session cookies.
 """
 
@@ -25,7 +25,7 @@ load_dotenv()
 
 # Configuration
 COOKIE_SECRET = os.getenv('AUTH_COOKIE_SECRET', os.urandom(32).hex())
-COOKIE_NAME = 'reo_auth_session'
+COOKIE_NAME = 'grump_auth_session'
 COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
 OTP_EXPIRY = 10 * 60  # 10 minutes in seconds
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
@@ -33,7 +33,7 @@ SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
 SMTP_USER = os.getenv('SMTP_USER', '')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
-DASHBOARD_URL = os.getenv('DASHBOARD_URL', 'https://dashboards.thegraph.foundation/reo/')
+DASHBOARD_URL = os.getenv('DASHBOARD_URL', 'https://dashboards.thegraph.foundation/grump/')
 
 # Rate limiting (in-memory, simple)
 rate_limit_store = {}  # {email: [timestamp1, timestamp2, ...]}
@@ -56,9 +56,10 @@ app = Bottle()
 def load_whitelist():
     """Load email whitelist from allowed_people.txt"""
     # Use absolute path for production deployment
-    whitelist_file = Path('/var/www/reo-config/allowed_people.txt')
+    whitelist_file = Path('/var/www/grump-config/allowed_people.txt')
     if not whitelist_file.exists():
         print("⚠️  WARNING: allowed_people.txt not found! Creating example file...")
+        whitelist_file.parent.mkdir(parents=True, exist_ok=True)
         with open(whitelist_file, 'w') as f:
             f.write("# Email whitelist - one email/pattern per line\n")
             f.write("# Examples:\n")
@@ -124,13 +125,13 @@ def send_otp_email(email, otp_code):
     """Send OTP code via email"""
     try:
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = 'Your REO Dashboard Login Code'
+        msg['Subject'] = 'Your GRUMP Dashboard Login Code'
         msg['From'] = SMTP_FROM
         msg['To'] = email
         
         # Create email body
         text = f"""
-REO Dashboard - One-Time Password
+GRUMP Dashboard - One-Time Password
 
 Your login code is: {otp_code}
 
@@ -139,7 +140,7 @@ This code will expire in 10 minutes.
 If you didn't request this code, please ignore this email.
 
 ---
-The Graph Protocol - Rewards Eligibility Oracle Dashboard
+The Graph Protocol - GRUMP Dashboard
 {DASHBOARD_URL}
 """
         
@@ -161,10 +162,10 @@ The Graph Protocol - Rewards Eligibility Oracle Dashboard
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">🔐 REO Dashboard</div>
+            <div class="logo">🔐 GRUMP Dashboard</div>
         </div>
         <h2 style="color: #333;">Your Login Code</h2>
-        <p>Use this one-time password to access the REO Dashboard:</p>
+        <p>Use this one-time password to access the GRUMP Dashboard:</p>
         <div class="otp-code">
             <div class="code">{otp_code}</div>
         </div>
@@ -172,7 +173,7 @@ The Graph Protocol - Rewards Eligibility Oracle Dashboard
         <p class="info">If you didn't request this code, please ignore this email.</p>
         <div class="footer">
             <p><strong>The Graph Protocol</strong></p>
-            <p>Rewards Eligibility Oracle Dashboard</p>
+            <p>GRUMP Dashboard</p>
             <p><a href="{DASHBOARD_URL}" style="color: #6B46C1;">{DASHBOARD_URL}</a></p>
         </div>
     </div>
@@ -270,20 +271,20 @@ def index():
     
     if email:
         # User is authenticated - serve dashboard from web root
-        return static_file('index.html', root='/var/www/iproot/reo')
+        return static_file('index.html', root='/var/www/iproot/grump')
     else:
         # User not authenticated - serve login page from web root
-        return static_file('login.html', root='/var/www/iproot/reo')
+        return static_file('login.html', root='/var/www/iproot/grump')
 
 @app.route('/static/<filepath:path>')
 def serve_static(filepath):
     """Serve static files (images, etc.) from web root"""
-    return static_file(filepath, root='/var/www/iproot/reo')
+    return static_file(filepath, root='/var/www/iproot/grump')
 
 @app.route('/<filename:re:.*\.(png|jpg|jpeg|gif|ico|css|js)>')
 def serve_assets(filename):
     """Serve image and asset files directly"""
-    return static_file(filename, root='/var/www/iproot/reo')
+    return static_file(filename, root='/var/www/iproot/grump')
 
 @app.post('/request-otp')
 def request_otp():
@@ -398,7 +399,7 @@ def health():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🔐 REO Dashboard Authentication Gateway")
+    print("🔐 GRUMP Dashboard Authentication Gateway")
     print("=" * 60)
     
     # Check configuration
@@ -412,14 +413,14 @@ if __name__ == '__main__':
     print()
     
     # Check if index.html exists in web root
-    if not Path('/var/www/iproot/reo/index.html').exists():
-        print("⚠️  WARNING: index.html not found in /var/www/iproot/reo/!")
+    if not Path('/var/www/iproot/grump/index.html').exists():
+        print("⚠️  WARNING: index.html not found in /var/www/iproot/grump/!")
         print("   Run generate_dashboard.py first to create the dashboard")
         print()
     
     # Check if login.html exists in web root
-    if not Path('/var/www/iproot/reo/login.html').exists():
-        print("⚠️  WARNING: login.html not found in /var/www/iproot/reo/!")
+    if not Path('/var/www/iproot/grump/login.html').exists():
+        print("⚠️  WARNING: login.html not found in /var/www/iproot/grump/!")
         print("   Login page is missing - authentication will not work")
         print()
     

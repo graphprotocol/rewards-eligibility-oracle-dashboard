@@ -21,15 +21,10 @@ This system ensures that rewards are distributed only to indexers who actively s
 
 ## 🆕 Recent Updates
 
-**Version 0.0.14** (Nov 4, 2025):
-- 🔐 **Authentication System**: Optional email-based OTP authentication for dashboard access control
-- 📧 **Email Whitelist**: Support for exact emails and wildcard domains (`*@thegraph.foundation`)
-- 🔑 **6-Digit OTP Codes**: Secure one-time passwords with 10-minute expiry
-- 🍪 **7-Day Sessions**: Stay logged in for a week with tamper-proof signed cookies
-- 🚦 **Rate Limiting**: Protection against OTP spam (5 requests per hour)
-- 📖 **Complete Documentation**: New [AUTHENTICATION.md](AUTHENTICATION.md) guide with setup, deployment, and security best practices
-- 🎨 **Beautiful Login Page**: Responsive UI matching dashboard design
-- 🛡️ **Production-Ready**: Includes systemd service configuration and Nginx integration
+**Version 0.0.15** (Nov 5, 2025):
+- 🌐 **Public Access**: REO dashboard is now publicly accessible without authentication
+- ⚡ **Improved Performance**: Direct static file serving for faster load times
+- 🔒 **Security**: Sensitive files (.py, .env) remain protected
 
 **Version 0.0.13** (Nov 3, 2025):
 - 🎯 **Watch Specific Indexers**: New `/watch`, `/unwatch`, and `/watchlist` commands let subscribers monitor specific indexers
@@ -61,13 +56,6 @@ This project includes comprehensive documentation:
   - Installation and usage instructions
   - File structure and configuration
   
-- **[AUTHENTICATION.md](AUTHENTICATION.md)** - Authentication System Guide
-  - Email-based OTP authentication setup
-  - Access control and whitelist configuration
-  - Production deployment with systemd
-  - Security features and best practices
-  - Troubleshooting and maintenance
-  
 - **[README_TelegramBOT.md](README_TelegramBOT.md)** - Telegram Bot Setup Guide
   - Complete bot deployment instructions
   - VPS setup and configuration
@@ -83,7 +71,6 @@ This project includes comprehensive documentation:
   - Log rotation and maintenance
   
 - **[UTILS_COMMANDS.md](UTILS_COMMANDS.md)** - Utility Commands Reference
-  - Authentication gateway service management
   - Telegram bot service commands
   - Nginx configuration and restart commands
   - Log viewing and troubleshooting
@@ -540,11 +527,6 @@ The bot automatically manages subscribers in `subscribers_telegram.json`:
 ├── requirements.txt                               # Python dependencies
 ├── README.md                                      # This file
 │
-├── auth_gate.py                                   # Authentication gateway server (optional)
-├── login.html                                     # Login page UI (optional)
-├── allowed_people.txt                             # Email whitelist for access control (optional)
-├── AUTHENTICATION.md                              # Authentication setup guide
-│
 ├── telegram_bot.py                                # Telegram bot for user subscriptions (optional)
 ├── telegram_notifier.py                           # Notification sender module (optional)
 ├── telegram_bot_service.service                   # Systemd service file for bot (optional)
@@ -552,8 +534,7 @@ The bot automatically manages subscribers in `subscribers_telegram.json`:
 ├── subscribers_telegram.json.example              # Example subscriber structure
 ├── logs/                                          # Telegram bot logs directory (generated)
 │   ├── telegram_bot.log                           # Bot technical logs
-│   ├── telegram_bot_activity.log                  # User activity logs
-│   └── auth_gateway.log                           # Authentication gateway logs (generated)
+│   └── telegram_bot_activity.log                  # User activity logs
 └── cron.log                                       # Cron job logs (generated)
 ```
 
