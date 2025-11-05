@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.15] - 2025-11-05
+
+### Added
+- **Breadcrumb Navigation** - Added navigation bar at the top of the dashboard
+  - CSS-styled home icon (no emoji dependency)
+  - Format: "Home >> REO Eligibility Dashboard"
+  - Links to `../index.html` for easy navigation back to main site
+  - Positioned outside the main container frame
+  - Matches existing dark theme design (#0C0A1D background, #F8F6FF text, #9CA3AF links)
+  - Responsive and mobile-friendly
+
+### Changed
+- **REO Dashboard is now publicly accessible** - Removed authentication requirements
+- Dashboard serves static files directly via Nginx for improved performance
+- Removed authentication gateway, login page, and email whitelist files
+- Updated README.md to remove authentication references
+- Preserved GRUMP authentication system in `grump-auth/` directory for future use
+
+### Removed
+- `auth_gate.py` - Authentication gateway (REO-specific)
+- `auth_gate.service` - Systemd service file (REO-specific)
+- `AUTHENTICATION.md` - Auth documentation (moved to grump-auth/)
+- `QUICKSTART_AUTH.md` - Quick start guide (moved to grump-auth/)
+- `allowed_people.txt` and `allowed_people.txt.example` - Email whitelist (moved to grump-auth/)
+- `login.html` - Login page (moved to grump-auth/)
+
+### Security
+- Sensitive files (.py, .env, configuration files) remain protected via Nginx configuration
+- JSON data files and dashboard HTML are now publicly accessible as intended
+
+---
+
 ## [0.0.14] - 2025-11-04
 
 ### Added
