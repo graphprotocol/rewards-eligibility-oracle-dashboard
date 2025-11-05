@@ -1159,6 +1159,69 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             padding: 20px;
         }}
         
+        .breadcrumb {{
+            max-width: 1200px;
+            margin: 0 auto 15px auto;
+            padding: 12px 20px;
+            background: rgba(12, 10, 29, 0.6);
+            border-radius: 8px;
+            border: 1px solid #9CA3AF;
+            color: #F8F6FF;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .breadcrumb a {{
+            color: #9CA3AF;
+            text-decoration: none;
+            transition: color 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        
+        .breadcrumb a:hover {{
+            color: #F8F6FF;
+        }}
+        
+        .breadcrumb-separator {{
+            color: #9CA3AF;
+            margin: 0 4px;
+            font-weight: 300;
+        }}
+        
+        .home-icon {{
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+            position: relative;
+        }}
+        
+        .home-icon::before {{
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid currentColor;
+        }}
+        
+        .home-icon::after {{
+            content: '';
+            position: absolute;
+            left: 2px;
+            bottom: 0;
+            width: 12px;
+            height: 9px;
+            background-color: currentColor;
+        }}
+        
         .container {{
             max-width: 1200px;
             margin: 0 auto;
@@ -1866,6 +1929,15 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
     </style>
 </head>
 <body>
+    <div class="breadcrumb">
+        <a href="../index.html">
+            <span class="home-icon"></span>
+            <b>Home</b>
+        </a>
+        <span class="breadcrumb-separator">>></span>
+        <span>REO Eligibility Dashboard</span>
+    </div>
+    
     <div class="container">
         <div class="header">
             <div class="title-container">
