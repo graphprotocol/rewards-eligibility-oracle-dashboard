@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.0.15] - 2025-11-05
+## [0.0.15] - 2025-11-07
 
 ### Added
 - **Breadcrumb Navigation** - Added navigation bar at the top of the dashboard
@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Positioned outside the main container frame
   - Matches existing dark theme design (#0C0A1D background, #F8F6FF text, #9CA3AF links)
   - Responsive and mobile-friendly
+- **Transaction Hash Tracking** - Added `last_renewed_on_tx` field to indexer metadata
+  - Stores the transaction hash when an indexer is confirmed eligible
+  - Preserved when indexer transitions to grace or ineligible status
+  - Available in `active_indexers.json` metadata section as `transaction_hash`
+- **Clickable Transaction Links** - Last Renewed date now links to Arbiscan transaction
+  - Eligible indexers with transaction hash: Date links to `https://sepolia.arbiscan.io/tx/{hash}`
+  - Maintains hover tooltip with full date/time information
+  - Applied to both static HTML and dynamic JavaScript rendering
+  - Ineligible indexers continue to show "Never" with no link
 
 ### Changed
 - **REO Dashboard is now publicly accessible** - Removed authentication requirements

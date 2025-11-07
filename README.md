@@ -21,10 +21,13 @@ This system ensures that rewards are distributed only to indexers who actively s
 
 ## 🆕 Recent Updates
 
-**Version 0.0.15** (Nov 5, 2025):
+**Version 0.0.15** (Nov 7, 2025):
 - 🌐 **Public Access**: REO dashboard is now publicly accessible without authentication
 - ⚡ **Improved Performance**: Direct static file serving for faster load times
 - 🔒 **Security**: Sensitive files (.py, .env) remain protected
+- 🧭 **Breadcrumb Navigation**: Added navigation bar at top with CSS-styled home icon
+- 🔗 **Transaction Links**: Last Renewed dates now link to Arbiscan transaction details
+- 📊 **Transaction Hash Tracking**: New `last_renewed_on_tx` field stores renewal transaction hash
 
 **Version 0.0.13** (Nov 3, 2025):
 - 🎯 **Watch Specific Indexers**: New `/watch`, `/unwatch`, and `/watchlist` commands let subscribers monitor specific indexers
@@ -96,6 +99,8 @@ This project includes comprehensive documentation:
 - ⏳ **Grace Period Monitoring**: Shows when grace period expires for indexers in transition
 - 📱 **Responsive Design**: Mobile-friendly dark theme UI with collapsible sections
 - 💾 **Offline Fallback**: Can work with cached transaction data from JSON file
+- 🔗 **Transaction Links**: Last Renewed dates link to Arbiscan transaction details for eligible indexers
+- 🧭 **Breadcrumb Navigation**: Easy navigation back to home page with styled breadcrumb bar
 
 ## Understanding Indexer Status
 
