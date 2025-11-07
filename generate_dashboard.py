@@ -2069,6 +2069,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
         eligible_until_short = indexer.get("eligible_until_short", "")
         eligible_until_readable = indexer.get("eligible_until_readable", "")
+        last_renewed_on_tx = indexer.get("last_renewed_on_tx", "")
         
         # Set status badge based on eligibility
         if is_eligible:
@@ -2076,11 +2077,15 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         else:
             status_badge = '<span class="legend-badge ineligible">ineligible</span>'
         
-        # Format Last Renewed cell with hover tooltip
+        # Format Last Renewed cell with hover tooltip and transaction link
         if eligibility_renewal_time_short == "Never":
             last_renewed_cell = eligibility_renewal_time_short
         else:
-            last_renewed_cell = f'<span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span>'
+            # If we have a transaction hash, make the date a link
+            if last_renewed_on_tx:
+                last_renewed_cell = f'<a href="https://sepolia.arbiscan.io/tx/{last_renewed_on_tx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span></a>'
+            else:
+                last_renewed_cell = f'<span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span>'
         
         # Format Eligible Until cell with hover tooltip
         if eligible_until_short:
@@ -2131,6 +2136,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
         eligible_until_short = indexer.get("eligible_until_short", "")
         eligible_until_readable = indexer.get("eligible_until_readable", "")
+        last_renewed_on_tx = indexer.get("last_renewed_on_tx", "")
         
         # Set status badge based on status
         if status == "eligible":
@@ -2140,7 +2146,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         else:
             status_badge = '<span class="legend-badge ineligible">ineligible</span>'
         
-        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_short}", "{eligibility_renewal_time_readable}", "{eligible_until_short}", "{eligible_until_readable}", "{status}"],
+        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_short}", "{eligibility_renewal_time_readable}", "{eligible_until_short}", "{eligible_until_readable}", "{status}", "{last_renewed_on_tx}"],
 """
 
     html_content += """        ];
@@ -2301,17 +2307,22 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         function renderTable() {
             tableBody.innerHTML = '';
             currentData.forEach((row, index) => {
-                const [address, ensName, status, lastRenewedShort, lastRenewedFull, eligibleUntilShort, eligibleUntilFull, statusString] = row;
+                const [address, ensName, status, lastRenewedShort, lastRenewedFull, eligibleUntilShort, eligibleUntilFull, statusString, lastRenewedOnTx] = row;
                 const ensDisplay = ensName || 'No ENS';
                 const ensClass = ensName ? 'ens-name' : 'empty-ens';
                 const explorerUrl = `https://thegraph.com/explorer/profile/${address}?view=Indexing&chain=arbitrum-one`;
                 
-                // Format Last Renewed cell with hover tooltip
+                // Format Last Renewed cell with hover tooltip and transaction link
                 let lastRenewedCell;
                 if (lastRenewedShort === 'Never') {
                     lastRenewedCell = lastRenewedShort;
                 } else {
-                    lastRenewedCell = `<span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span>`;
+                    // If we have a transaction hash, make the date a link
+                    if (lastRenewedOnTx) {
+                        lastRenewedCell = `<a href="https://sepolia.arbiscan.io/tx/${lastRenewedOnTx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span></a>`;
+                    } else {
+                        lastRenewedCell = `<span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span>`;
+                    }
                 }
                 
                 // Format Eligible Until cell with hover tooltip
