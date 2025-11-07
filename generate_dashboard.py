@@ -15,7 +15,7 @@ from typing import List, Tuple, Optional
 from dotenv import load_dotenv
 
 # Version of the dashboard generator
-VERSION = "0.0.14"
+VERSION = "0.0.15"
 
 # Import telegram notifier (will be skipped if module not available)
 try:
@@ -345,7 +345,7 @@ def load_ens_cache(cache_file: str = 'ens_resolution.json') -> Optional[dict]:
         return None
 
 
-def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexers.json', use_cached_ens: bool = False, contract_address: Optional[str] = None, rpc_endpoint: Optional[str] = None) -> bool:
+def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexers.json', use_cached_ens: bool = False, contract_address: Optional[str] = None, rpc_endpoint: Optional[str] = None, transaction_hash: Optional[str] = None) -> bool:
     """
     Retrieve the list of active indexers with self stake > 0 from The Graph's network subgraph.
     ENS resolution can be cached or fetched from subgraph based on use_cached_ens parameter.
@@ -359,6 +359,7 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
         use_cached_ens: If True, use cached ENS data; if False, fetch from subgraph
         contract_address: The contract address to query oracle update time
         rpc_endpoint: RPC endpoint URL
+        transaction_hash: Transaction hash to store in metadata (optional)
         
     Returns:
         True if successful, False otherwise
@@ -501,7 +502,8 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
                 "retrieved": current_timestamp,
                 "total_count": len(indexers_raw),
                 "last_oracle_update_time": last_oracle_update_time,
-                "eligibility_period": eligibility_period
+                "eligibility_period": eligibility_period,
+                "transaction_hash": transaction_hash if transaction_hash else None
             },
             "indexers": []
         }
@@ -2492,6 +2494,19 @@ def main():
     api_key = os.getenv("ARBISCAN_API_KEY")
     rpc_endpoint = os.getenv("RPC_ENDPOINT")
     
+    # Get transaction hash first (before retrieving active indexers)
+    transaction_hash = None
+    if contract_address and rpc_endpoint:
+        # Try to get transaction data
+        last_transaction = get_last_transaction_from_json()
+        if not last_transaction:
+            last_transaction = get_last_transaction_via_rpc(contract_address, rpc_endpoint)
+        if not last_transaction and api_key:
+            last_transaction = get_last_transaction(contract_address, api_key)
+        
+        if last_transaction:
+            transaction_hash = last_transaction.get("hash")
+    
     # Retrieve active indexers by querying network subgraph
     if graph_api_key and graph_api_key != "your_graph_api_key_here":
         print()
@@ -2504,7 +2519,7 @@ def main():
             print("   Fetching fresh ENS data from subgraph")
         print("=" * 60)
         print()
-        retrieveActiveIndexers(graph_api_key, use_cached_ens=use_cached_ens, contract_address=contract_address, rpc_endpoint=rpc_endpoint)
+        retrieveActiveIndexers(graph_api_key, use_cached_ens=use_cached_ens, contract_address=contract_address, rpc_endpoint=rpc_endpoint, transaction_hash=transaction_hash)
         print()
     else:
         print("⚠ GRAPH_API_KEY not set, skipping active indexers retrieval")
