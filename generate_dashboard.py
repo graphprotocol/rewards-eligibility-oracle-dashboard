@@ -1746,8 +1746,9 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         .external-link-icon {{
             width: 12px;
             height: 12px;
-            opacity: 0.6;
+            opacity: 0.8;
             transition: opacity 0.3s ease;
+            color: #9CA3AF;
         }}
         
         .address-link:hover .external-link-icon {{
