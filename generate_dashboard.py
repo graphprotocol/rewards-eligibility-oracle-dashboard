@@ -508,9 +508,28 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
             "indexers": []
         }
         
+        # Load previous run data to preserve last_renewed_on_tx
+        previous_indexers_map = {}
+        backup_file = output_file.replace('.json', '_previous_run.json')
+        if os.path.exists(output_file):
+            try:
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    previous_data = json.load(f)
+                previous_indexers = previous_data.get("indexers", [])
+                previous_indexers_map = {
+                    indexer.get("address", "").lower(): indexer.get("last_renewed_on_tx", "")
+                    for indexer in previous_indexers
+                }
+                print(f"✓ Loaded {len(previous_indexers_map)} indexers from previous run")
+            except Exception as e:
+                print(f"⚠ Warning: Could not load previous file: {e}")
+        
         # Process each indexer without ENS name
         for indexer in indexers_raw:
             address = indexer.get("id", "")
+            
+            # Get previous last_renewed_on_tx value if exists
+            previous_tx = previous_indexers_map.get(address.lower(), "")
             
             indexer_data = {
                 "address": address,
@@ -519,13 +538,13 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
                 "eligible_until": "",
                 "eligible_until_readable": "",
                 "eligibility_renewal_time": "",
-                "last_status_change_date": ""
+                "last_status_change_date": "",
+                "last_renewed_on_tx": previous_tx
             }
             output_data["indexers"].append(indexer_data)
         
         # Backup the previous run's file before writing the new one
         if os.path.exists(output_file):
-            backup_file = output_file.replace('.json', '_previous_run.json')
             try:
                 shutil.copy(output_file, backup_file)
                 print(f"✓ Backed up previous run to {backup_file}")
@@ -714,10 +733,11 @@ def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str =
         # ========== PASS 3: Update status based on eligibility_renewal_time comparison ==========
         print(f"Pass 3: Updating status based on eligibility renewal time and grace period...")
         
-        # Get last_oracle_update_time and eligibility_period from metadata
+        # Get last_oracle_update_time, eligibility_period, and transaction_hash from metadata
         metadata = data.get("metadata", {})
         last_oracle_update_time = metadata.get("last_oracle_update_time")
         eligibility_period = metadata.get("eligibility_period")
+        transaction_hash = metadata.get("transaction_hash", "")
         
         # Get current timestamp
         current_time = int(datetime.now(timezone.utc).timestamp())
@@ -745,6 +765,9 @@ def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str =
                 indexer["eligible_until"] = ""
                 indexer["eligible_until_readable"] = ""
                 indexer["eligible_until_short"] = ""
+                # Update last_renewed_on_tx with current transaction hash when eligible
+                if transaction_hash:
+                    indexer["last_renewed_on_tx"] = transaction_hash
                 eligible_status_count += 1
             elif eligibility_renewal_time != last_oracle_update_time and eligibility_period and eligibility_renewal_time > 0:
                 # Check if in grace period
@@ -757,18 +780,21 @@ def checkEligibility(contract_address: str, rpc_endpoint: str, input_file: str =
                     indexer["eligible_until_readable"] = dt.strftime("%-d-%b-%Y at %H:%M:%S UTC")
                     indexer["eligible_until_short"] = dt.strftime("%-d-%b-%Y")
                     grace_status_count += 1
+                    # Keep previous last_renewed_on_tx (don't update when in grace)
                 else:
                     indexer["status"] = "ineligible"
                     indexer["eligible_until"] = ""
                     indexer["eligible_until_readable"] = ""
                     indexer["eligible_until_short"] = ""
                     ineligible_status_count += 1
+                    # Keep previous last_renewed_on_tx (don't update when ineligible)
             else:
                 indexer["status"] = "ineligible"
                 indexer["eligible_until"] = ""
                 indexer["eligible_until_readable"] = ""
                 indexer["eligible_until_short"] = ""
                 ineligible_status_count += 1
+                # Keep previous last_renewed_on_tx (don't update when ineligible)
         
         print(f"✓ Pass 3 complete:")
         print(f"  - Eligible: {eligible_status_count}")

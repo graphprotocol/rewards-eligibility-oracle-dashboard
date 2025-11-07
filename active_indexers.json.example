@@ -1,29 +1,50 @@
 {
   "metadata": {
     "retrieved": "2025-10-17 19:50:00 UTC",
-    "total_count": 3
+    "total_count": 3,
+    "last_oracle_update_time": 1760696509,
+    "eligibility_period": 1209600,
+    "transaction_hash": "0x4401f694b80775533566053f88026220e1eab4c84f771e5b600df76f89a768bc"
   },
   "indexers": [
     {
       "address": "0x0058223c6617cca7ce76fc929ec9724cd43d4542",
       "is_eligible": true,
-      "status": "",
+      "status": "eligible",
       "eligible_until": "",
-      "eligibility_renewal_time": 1760696509
+      "eligible_until_readable": "",
+      "eligibility_renewal_time": 1760696509,
+      "last_status_change_date": "3/Nov/2025",
+      "eligibility_renewal_time_readable": "6-Nov-2025 at 10:55:09 UTC",
+      "eligibility_renewal_time_short": "6-Nov-2025",
+      "eligible_until_short": "",
+      "last_renewed_on_tx": "0x4401f694b80775533566053f88026220e1eab4c84f771e5b600df76f89a768bc"
     },
     {
       "address": "0x01f17c392614c7ea586e7272ed348efee21b90a3",
       "is_eligible": true,
-      "status": "",
+      "status": "eligible",
       "eligible_until": "",
-      "eligibility_renewal_time": 1760696509
+      "eligible_until_readable": "",
+      "eligibility_renewal_time": 1760696509,
+      "last_status_change_date": "3/Nov/2025",
+      "eligibility_renewal_time_readable": "6-Nov-2025 at 10:55:09 UTC",
+      "eligibility_renewal_time_short": "6-Nov-2025",
+      "eligible_until_short": "",
+      "last_renewed_on_tx": "0x4401f694b80775533566053f88026220e1eab4c84f771e5b600df76f89a768bc"
     },
     {
       "address": "0x089f78d8cf0a5ae1b7a581b1910a73f8cb3e4774",
       "is_eligible": false,
-      "status": "",
+      "status": "ineligible",
       "eligible_until": "",
-      "eligibility_renewal_time": 0
+      "eligible_until_readable": "",
+      "eligibility_renewal_time": 0,
+      "last_status_change_date": "3/Nov/2025",
+      "eligibility_renewal_time_readable": "Never",
+      "eligibility_renewal_time_short": "Never",
+      "eligible_until_short": "",
+      "last_renewed_on_tx": ""
     }
   ]
 }
