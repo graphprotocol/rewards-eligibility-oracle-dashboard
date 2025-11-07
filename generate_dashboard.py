@@ -1820,12 +1820,18 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         .transaction-hash {{
             color: #F8F6FF;
             text-decoration: none;
-            font-family: 'Courier New', monospace;
+            transition: color 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }}
         
         .transaction-hash:hover {{
             color: #9CA3AF;
-            text-decoration: underline;
+        }}
+        
+        .transaction-hash:hover .external-link-icon {{
+            opacity: 1;
         }}
         
         .error-message {{
@@ -2081,9 +2087,9 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         if eligibility_renewal_time_short == "Never":
             last_renewed_cell = eligibility_renewal_time_short
         else:
-            # If we have a transaction hash, make the date a link
+            # If we have a transaction hash, make the date a link with external icon
             if last_renewed_on_tx:
-                last_renewed_cell = f'<a href="https://sepolia.arbiscan.io/tx/{last_renewed_on_tx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span></a>'
+                last_renewed_cell = f'<a href="https://sepolia.arbiscan.io/tx/{last_renewed_on_tx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>'
             else:
                 last_renewed_cell = f'<span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span>'
         
@@ -2317,9 +2323,9 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                 if (lastRenewedShort === 'Never') {
                     lastRenewedCell = lastRenewedShort;
                 } else {
-                    // If we have a transaction hash, make the date a link
+                    // If we have a transaction hash, make the date a link with external icon
                     if (lastRenewedOnTx) {
-                        lastRenewedCell = `<a href="https://sepolia.arbiscan.io/tx/${lastRenewedOnTx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span></a>`;
+                        lastRenewedCell = `<a href="https://sepolia.arbiscan.io/tx/${lastRenewedOnTx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>`;
                     } else {
                         lastRenewedCell = `<span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span>`;
                     }
