@@ -55,10 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `allowed_people.txt` and `allowed_people.txt.example` - Email whitelist (moved to grump-auth/)
 - `login.html` - Login page (moved to grump-auth/)
 
-### Security
-- Sensitive files (.py, .env, configuration files) remain protected via Nginx configuration
-- JSON data files and dashboard HTML are now publicly accessible as intended
-
 ---
 
 ## [0.0.14] - 2025-11-04
@@ -73,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Installation and configuration steps
   - Production deployment with systemd
   - SMTP/email setup for multiple providers (Gmail, SendGrid, AWS SES, Mailgun)
-  - Security features and best practices
+  - Best practices
   - Monitoring, logging, and troubleshooting
 - Email whitelist with wildcard domain support (`*@thegraph.foundation`)
 - 6-digit OTP codes with 10-minute expiry
@@ -88,19 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated `README.md` to reference AUTHENTICATION.md in documentation section
 - Updated file structure section to include authentication components
-- Updated `.gitignore` to protect `allowed_people.txt` (contains authorized emails)
 - Updated `env.example` with authentication configuration variables
 - Updated `requirements.txt` to include `bottle>=0.12.25` web framework
-
-### Security
-- HTTP-only, Secure, SameSite=Strict cookies prevent XSS and CSRF attacks
-- HMAC-SHA256 signed session tokens prevent tampering
-- In-memory OTP storage (cleared on restart for security)
-- Rate limiting prevents OTP spam and brute force attempts
-- Email whitelist prevents unauthorized access attempts
-- Automatic cleanup of expired OTPs and rate limit entries
-
-### Changed
 - **Authentication gateway now uses port 8081** instead of 8080 to avoid conflicts with other applications
 - Updated all documentation to reflect new port configuration
 

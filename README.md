@@ -24,7 +24,6 @@ This system ensures that rewards are distributed only to indexers who actively s
 **Version 0.0.15** (Nov 7, 2025):
 - 🌐 **Public Access**: REO dashboard is now publicly accessible without authentication
 - ⚡ **Improved Performance**: Direct static file serving for faster load times + instant transaction fetching via Arbiscan API
-- 🔒 **Security**: Sensitive files (.py, .env) remain protected
 - 🧭 **Breadcrumb Navigation**: Added navigation bar at top with CSS-styled home icon
 - 🔗 **Transaction Links**: Last Renewed dates now link to Arbiscan transaction details
 - 📊 **Transaction Hash Tracking**: New `last_renewed_on_tx` field stores renewal transaction hash
