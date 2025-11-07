@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed authentication gateway, login page, and email whitelist files
 - Updated README.md to remove authentication references
 - Preserved GRUMP authentication system in `grump-auth/` directory for future use
+- **Significant performance improvement** - Replaced slow RPC block scanning with fast Arbiscan API
+  - Transaction fetching now uses Etherscan V2 API (`txlist` endpoint with descending sort)
+  - Instant transaction retrieval (< 1 second) vs. previous 50,000 block scan
+  - Simplified transaction fetching logic with API-first approach
+  - RPC fallback removed in favor of cached JSON fallback
 
 ### Removed
 - `auth_gate.py` - Authentication gateway (REO-specific)

@@ -78,48 +78,59 @@ def save_transaction_to_json(transaction_data: dict, json_file: str = 'last_tran
 
 def get_last_transaction(contract_address: str, api_key: str) -> Optional[dict]:
     """
-    Get the last transaction for a contract from Arbiscan API.
+    Get the last transaction for a contract from Arbiscan API (Sepolia).
+    Uses Etherscan API V2 endpoint with txlist action, descending sort, and limit 1 for efficiency.
     
     Args:
         contract_address: The contract address to query
-        api_key: Arbiscan API key
+        api_key: Arbiscan/Etherscan API key
         
     Returns:
-        Dictionary with transaction data or None if error
+        Dictionary with transaction data (keys: 'hash', 'blockNumber', 'timeStamp', 'from') or None if error
     """
+    base_url = "https://api.etherscan.io/v2/api"
+    params = {
+        "module": "account",
+        "action": "txlist",
+        "address": contract_address,
+        "sort": "desc",  # Descending order (most recent first)
+        "page": 1,
+        "offset": 1,  # Only get the last transaction
+        "chainid": "421614",  # Arbitrum Sepolia chain ID
+        "apikey": api_key
+    }
+
     try:
-        # Try the original Arbiscan API endpoint
-        url = "https://api.arbiscan.io/api"
-        params = {
-            'module': 'account',
-            'action': 'txlist',
-            'address': contract_address,
-            'startblock': 0,
-            'endblock': 99999999,
-            'page': 1,
-            'offset': 1,  # Get only the latest transaction
-            'sort': 'desc',  # Sort by newest first
-            'apikey': api_key
-        }
-        
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        
+        print(f"Fetching latest transaction from Arbiscan API (Etherscan V2)...")
+        response = requests.get(base_url, params=params, timeout=15)
+        response.raise_for_status()  # Raise error for bad status codes
         data = response.json()
-        
-        if data['status'] == '1' and data['result']:
-            return data['result'][0]  # Return the first (latest) transaction
+
+        if data.get("status") == "1" and data.get("result"):
+            tx = data["result"][0]
+            tx_hash = tx["hash"]
+            block_num = tx["blockNumber"]
+            timestamp = int(tx["timeStamp"])
+            
+            print(f"✓ Found latest transaction via Arbiscan API!")
+            print(f"  Hash: {tx_hash}")
+            print(f"  Block: {block_num}")
+            
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            print(f"  Date: {dt.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+            
+            return tx
         else:
-            # API returned an error or no results
-            error_message = data.get('message', 'Unknown error')
-            print(f"API Error: {error_message}")
+            print("No transactions found or API error:", data.get("message"))
             return None
             
-    except requests.exceptions.RequestException as e:
-        print(f"Request error: {e}")
+    except requests.RequestException as e:
+        print(f"Request failed: {e}")
         return None
     except Exception as e:
-        print(f"Error fetching last transaction: {e}")
+        print(f"Error in get_last_transaction: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -162,38 +173,72 @@ def get_last_transaction_via_rpc(contract_address: str, rpc_endpoint: str) -> Op
         print(f"Latest block: {latest_int}")
 
         # Scan recent blocks for transactions to the contract
-        # Start with a reasonable window
-        scan_window = 100
-        print(f"Scanning last {scan_window} blocks for transactions to {contract_address}...")
+        # Based on QuickNode guide: iterate backwards from latest block
+        # On Arbitrum Sepolia, blocks are ~250ms apart
+        # 50,000 blocks = roughly 3-4 hours of history
+        scan_window = 50000
+        starting_block = max(0, latest_int - scan_window)
         
-        for block_num in range(latest_int, max(-1, latest_int - scan_window), -1):
-            # Get block with transaction hashes only (not full tx objects)
-            block = rpc_call("eth_getBlockByNumber", [hex(block_num), False])
+        print(f"Searching for last transaction to {contract_address}")
+        print(f"Scanning blocks {starting_block} to {latest_int} ({scan_window:,} blocks)...")
+        
+        # Iterate backwards from latest block to find most recent transaction
+        for i in range(scan_window):
+            block_num = latest_int - i
+            if block_num < starting_block:
+                break
+            
+            # Get block with FULL transaction objects (True flag)
+            block = rpc_call("eth_getBlockByNumber", [hex(block_num), True])
             if not isinstance(block, dict):
                 continue
             
             timestamp_hex = block.get("timestamp")
-            tx_hashes = block.get("transactions") or []
+            transactions = block.get("transactions") or []
             
-            # Check each transaction in reverse order (most recent first)
-            for tx_hash in reversed(tx_hashes):
-                tx = rpc_call("eth_getTransactionByHash", [tx_hash])
+            if not isinstance(transactions, list):
+                continue
+            
+            # Check each transaction in the block
+            for tx in transactions:
                 if not isinstance(tx, dict):
                     continue
                 
                 to_addr = (tx.get("to") or "").lower()
-                if to_addr and to_addr == contract_address.lower():
-                    print(f"Found transaction in block {block_num}: {tx_hash}")
+                from_addr = (tx.get("from") or "").lower()
+                
+                # Check if transaction involves our contract (to or from)
+                if (to_addr and to_addr == contract_address.lower()) or \
+                   (from_addr and from_addr == contract_address.lower()):
+                    tx_hash = tx.get("hash", "")
+                    block_number = hex_to_dec_str(block.get("number"))
+                    timestamp = hex_to_dec_str(timestamp_hex)
+                    
+                    print(f"\n✓ Found latest transaction!")
+                    print(f"  Hash: {tx_hash}")
+                    print(f"  Block: {block_number}")
+                    print(f"  Timestamp: {timestamp}")
+                    
+                    from datetime import datetime, timezone
+                    dt = datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+                    print(f"  Date: {dt.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                    
                     return {
-                        "hash": tx.get("hash", ""),
-                        "blockNumber": hex_to_dec_str(block.get("number")),
-                        "timeStamp": hex_to_dec_str(timestamp_hex),
+                        "hash": tx_hash,
+                        "blockNumber": block_number,
+                        "timeStamp": timestamp,
                     }
+            
+            # Progress indicator every 500 blocks
+            if i > 0 and i % 500 == 0:
+                print(f"  Scanned {i:,} blocks...", end='\r')
         
-        print(f"No transactions found in last {scan_window} blocks")
+        print(f"\nNo transactions found in last {scan_window:,} blocks")
         return None
     except Exception as e:
         print(f"Error in get_last_transaction_via_rpc: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -1139,16 +1184,14 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
     print("Fetching last transaction data...")
     last_transaction: Optional[dict] = None
     
-    # First, try to load from local JSON file
-    last_transaction = get_last_transaction_from_json()
-    
-    # If no local data, try RPC endpoint if available
-    if not last_transaction and rpc_endpoint:
-        last_transaction = get_last_transaction_via_rpc(contract_address, rpc_endpoint)
-    
-    # Final fallback to Arbiscan API
-    if not last_transaction:
+    # Fetch via Arbiscan API
+    if api_key:
         last_transaction = get_last_transaction(contract_address, api_key)
+    
+    # Fallback: load from local JSON file (cached data)
+    if not last_transaction:
+        print("⚠ Warning: Could not fetch fresh transaction data from API, using cached data")
+        last_transaction = get_last_transaction_from_json()
     
     # Save transaction data with script run timestamp
     if last_transaction:
@@ -2538,14 +2581,16 @@ def main():
     rpc_endpoint = os.getenv("RPC_ENDPOINT")
     
     # Get transaction hash first (before retrieving active indexers)
+    # Always fetch fresh data, don't use cached JSON for initial metadata
     transaction_hash = None
-    if contract_address and rpc_endpoint:
-        # Try to get transaction data
-        last_transaction = get_last_transaction_from_json()
+    if contract_address and api_key:
+        # Fetch transaction data via Arbiscan API
+        last_transaction = get_last_transaction(contract_address, api_key)
+        
+        # Fallback to cached JSON if API fails
         if not last_transaction:
-            last_transaction = get_last_transaction_via_rpc(contract_address, rpc_endpoint)
-        if not last_transaction and api_key:
-            last_transaction = get_last_transaction(contract_address, api_key)
+            print("⚠ Warning: Could not fetch fresh transaction data from API, using cached data")
+            last_transaction = get_last_transaction_from_json()
         
         if last_transaction:
             transaction_hash = last_transaction.get("hash")
