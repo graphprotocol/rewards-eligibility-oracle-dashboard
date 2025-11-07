@@ -23,9 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Available in `active_indexers.json` metadata section as `transaction_hash`
 - **Clickable Transaction Links** - Last Renewed date now links to Arbiscan transaction
   - Eligible indexers with transaction hash: Date links to `https://sepolia.arbiscan.io/tx/{hash}`
-  - Maintains hover tooltip with full date/time information
+  - External link icon displays next to linked dates for clear UX
   - Applied to both static HTML and dynamic JavaScript rendering
   - Ineligible indexers continue to show "Never" with no link
+- **Execution Time Logging** - Script now logs start time, end time, and total execution duration
+  - Displays timestamps in UTC format for consistency with dashboard
+  - Shows duration in both seconds and minutes for easy monitoring
+  - Useful for cron job monitoring and performance tracking
 
 ### Changed
 - **REO Dashboard is now publicly accessible** - Removed authentication requirements
@@ -38,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Instant transaction retrieval (< 1 second) vs. previous 50,000 block scan
   - Simplified transaction fetching logic with API-first approach
   - RPC fallback removed in favor of cached JSON fallback
+- **UI/UX Improvements**
+  - Removed hover tooltip from "Last Renewed" column for cleaner interface (tooltip still available on "Eligible Until")
+  - Added external link icon to indexer addresses in dynamic table rendering (consistency with static HTML)
+  - All external links now display consistent visual indicators
 
 ### Removed
 - `auth_gate.py` - Authentication gateway (REO-specific)

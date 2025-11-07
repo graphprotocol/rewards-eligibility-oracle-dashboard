@@ -2126,15 +2126,15 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         else:
             status_badge = '<span class="legend-badge ineligible">ineligible</span>'
         
-        # Format Last Renewed cell with hover tooltip and transaction link
+        # Format Last Renewed cell with transaction link (no tooltip)
         if eligibility_renewal_time_short == "Never":
             last_renewed_cell = eligibility_renewal_time_short
         else:
             # If we have a transaction hash, make the date a link with external icon
             if last_renewed_on_tx:
-                last_renewed_cell = f'<a href="https://sepolia.arbiscan.io/tx/{last_renewed_on_tx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>'
+                last_renewed_cell = f'<a href="https://sepolia.arbiscan.io/tx/{last_renewed_on_tx}" target="_blank" class="transaction-hash">{eligibility_renewal_time_short}<svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>'
             else:
-                last_renewed_cell = f'<span class="date-hover" data-full-date="{eligibility_renewal_time_readable}">{eligibility_renewal_time_short}</span>'
+                last_renewed_cell = eligibility_renewal_time_short
         
         # Format Eligible Until cell with hover tooltip
         if eligible_until_short:
@@ -2361,16 +2361,16 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                 const ensClass = ensName ? 'ens-name' : 'empty-ens';
                 const explorerUrl = `https://thegraph.com/explorer/profile/${address}?view=Indexing&chain=arbitrum-one`;
                 
-                // Format Last Renewed cell with hover tooltip and transaction link
+                // Format Last Renewed cell with transaction link (no tooltip)
                 let lastRenewedCell;
                 if (lastRenewedShort === 'Never') {
                     lastRenewedCell = lastRenewedShort;
                 } else {
                     // If we have a transaction hash, make the date a link with external icon
                     if (lastRenewedOnTx) {
-                        lastRenewedCell = `<a href="https://sepolia.arbiscan.io/tx/${lastRenewedOnTx}" target="_blank" class="transaction-hash"><span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>`;
-                    } else {
-                        lastRenewedCell = `<span class="date-hover" data-full-date="${lastRenewedFull}">${lastRenewedShort}</span>`;
+                        lastRenewedCell = `<a href="https://sepolia.arbiscan.io/tx/${lastRenewedOnTx}" target="_blank" class="transaction-hash">${lastRenewedShort}<svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>`;
+                } else {
+                    lastRenewedCell = lastRenewedShort;
                     }
                 }
                 
@@ -2382,7 +2382,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                 
                 const rowHTML = `
                     <tr>
-                        <td><a href="${explorerUrl}" target="_blank" class="address-link"><span class="address">${address}</span></a></td>
+                        <td><a href="${explorerUrl}" target="_blank" class="address-link"><span class="address">${address}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a></td>
                         <td><span class="${ensClass}">${ensDisplay}</span></td>
                         <td>${status}</td>
                         <td>${lastRenewedCell}</td>
@@ -2558,6 +2558,11 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
 
 def main():
     """Main function to generate the dashboard."""
+    start_time = datetime.now(timezone.utc)
+    print("=" * 70)
+    print(f"Script started at {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("=" * 70)
+    print()
     print("Generating Eligibility Dashboard...")
     
     # Check if .env file exists
@@ -2676,6 +2681,15 @@ def main():
     
     print("Dashboard generated successfully!")
     print("Open 'index.html' in your browser to view the dashboard.")
+    
+    # Log execution time
+    end_time = datetime.now(timezone.utc)
+    duration = (end_time - start_time).total_seconds()
+    print()
+    print("=" * 70)
+    print(f"Script completed at {end_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print(f"Total execution time: {duration:.2f} seconds ({duration/60:.2f} minutes)")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
