@@ -1,0 +1,11 @@
+# Development dependencies for Rewards Eligibility Oracle
+# Testing framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+
+# HTTP mocking
+responses>=0.23.0
+
+# Time mocking for grace period tests
+freezegun>=1.2.2
