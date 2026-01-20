@@ -1331,15 +1331,29 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
     <title>Eligibility Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
+        /* The Graph Brand Colors */
+        :root {{
+            --graph-purple: #6F4CFF;
+            --graph-blue: #4C66FF;
+            --graph-turquoise: #66D8FF;
+            --graph-green: #4BCA81;
+            --graph-yellow: #FFA801;
+            --graph-red: #ED34A6D;
+            --graph-gray: #494755;
+            --galaxy-dark: #0C0A1D;
+            --spacesuit-white: #F8F6FF;
+        }}
+
         * {{
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }}
-        
+
         body {{
             font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0C0A1D;
+            background: var(--galaxy-dark);
+            color: var(--spacesuit-white);
             min-height: 100vh;
             padding: 20px;
         }}
