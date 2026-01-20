@@ -2,8 +2,10 @@
 """
 Eligibility Dashboard Generator
 
-This script reads indexer data from indexers.txt and generates a static HTML dashboard
-with sortable table and search functionality.
+Fetches indexer data from The Graph Network subgraph, checks eligibility via
+smart contract, and generates a static HTML dashboard.
+
+Uses SQLite database for production-ready data persistence.
 """
 
 import os
@@ -15,8 +17,15 @@ from typing import List, Tuple, Optional
 from dotenv import load_dotenv
 import threading
 
+# Import database module
+from database import (
+    save_indexers, get_all_indexers, update_eligibility, log_status_change,
+    get_previous_indexers, update_status_changes, save_ens_cache, load_ens_cache,
+    save_transaction, get_last_transaction, update_sync_state, set_metadata, get_metadata
+)
+
 # Version of the dashboard generator
-VERSION = "0.0.18"
+VERSION = "0.0.19"
 
 
 class RoundRobinRPC:
@@ -193,54 +202,16 @@ except ImportError:
 
 
 def get_last_transaction_from_json(json_file: str = 'last_transaction.json') -> Optional[dict]:
-    """
-    Read the last transaction data from a local JSON file.
-    
-    Args:
-        json_file: Path to the JSON file containing transaction data
-        
-    Returns:
-        Dictionary with transaction data or None if file doesn't exist or is invalid
-    """
-    try:
-        if os.path.exists(json_file):
-            with open(json_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                print(f"Loaded transaction data from {json_file}")
-                return data
-        else:
-            print(f"{json_file} not found, will try API fallback...")
-            return None
-    except Exception as e:
-        print(f"Error reading {json_file}: {e}")
-        return None
+    """Wrapper: now uses database instead of JSON file."""
+    return get_last_transaction()
 
 
 def save_transaction_to_json(transaction_data: dict, json_file: str = 'last_transaction.json') -> None:
-    """
-    Save transaction data to a local JSON file with a timestamp of when the script ran.
-    
-    Args:
-        transaction_data: Dictionary with transaction data
-        json_file: Path to the JSON file to save to
-    """
-    try:
-        # Add the script run timestamp
-        current_timestamp = int(datetime.now(timezone.utc).timestamp())
-        current_readable = datetime.now(timezone.utc).strftime("%b-%d-%Y %H:%M:%S")
-        
-        # Create the data structure with the script run timestamp
-        data_to_save = transaction_data.copy()
-        data_to_save['last_script_run'] = current_timestamp
-        data_to_save['last_script_run_readable'] = current_readable
-        
-        # Save to file
-        with open(json_file, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=2)
-        
-        print(f"✓ Transaction data saved to {json_file} with timestamp")
-    except Exception as e:
-        print(f"Error saving to {json_file}: {e}")
+    """Wrapper: now uses database instead of JSON file."""
+    if save_transaction(transaction_data):
+        print(f"✓ Transaction data saved to database")
+    else:
+        print(f"⚠ Failed to save transaction data")
 
 
 def get_last_transaction(contract_address: str, api_key: str) -> Optional[dict]:
@@ -471,7 +442,7 @@ def get_eligibility_period(contract_address: str, rpc_manager: Optional[RoundRob
         return None
 
 
-def save_ens_cache(ens_mapping: dict, cache_file: str = 'ens_resolution.json') -> None:
+def save_ens_cache_db(ens_mapping: dict, cache_file: str = 'ens_resolution.json') -> None:
     """
     Save ENS resolution data to a cache file.
     
@@ -611,7 +582,7 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
         
         if use_cached_ens:
             print(f"Using cached ENS data...")
-            cached_ens = load_ens_cache()
+            cached_ens = load_ens_cache_db()
             if cached_ens:
                 ens_mapping = cached_ens
             else:
@@ -673,7 +644,7 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
             print(f"✓ Resolved {len(ens_mapping)} ENS names")
             
             # Save ENS cache for future use
-            save_ens_cache(ens_mapping)
+            save_ens_cache_db(ens_mapping)
         
         # Build the JSON structure (without ENS names)
         current_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
