@@ -1351,9 +1351,11 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         }}
 
         body {{
-            font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--galaxy-dark);
-            color: var(--spacesuit-white);
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-weight: 400;
+            background: linear-gradient(135deg, var(--graph-purple) 0%, var(--graph-blue) 50%, var(--galaxy-dark) 100%);
+            color: var(--lunar-gray);
+            line-height: 1.6;
             min-height: 100vh;
             padding: 20px;
         }}
@@ -1422,176 +1424,175 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         }}
         
         .container {{
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            background: #0C0A1D;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            overflow: hidden;
-            border: 1px solid #9CA3AF;
+            background: var(--spacesuit-white);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(12, 10, 29, 0.4);
         }}
-        
+
         .header {{
-            background: #0C0A1D;
-            color: #F8F6FF;
-            padding: 30px;
-            border-bottom: 1px solid #9CA3AF;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 2px solid rgba(111, 76, 255, 0.16);
+            position: relative;
         }}
-        
+
         .title-container {{
             display: flex;
             align-items: center;
             gap: 15px;
+            justify-content: center;
         }}
-        
+
         .header-icon {{
-            width: 50px;
-            height: 50px;
-            object-fit: contain;
+            font-size: 3.5em;
         }}
-        
+
         .header h1 {{
-            font-size: 2.2em;
+            font-size: 3.5em;
+            color: var(--graph-purple);
             margin: 0;
-            font-weight: 300;
+            font-weight: 700;
         }}
-        
+
         .header .subtitle {{
-            font-size: 0.95em;
-            opacity: 0.9;
-            font-weight: 300;
-            white-space: nowrap;
+            font-size: 1.1em;
+            color: var(--lunar-gray);
+            font-weight: 400;
+            letter-spacing: 0.5px;
         }}
         
         .search-container {{
-            padding: 25px 30px;
-            background: #0C0A1D;
-            border-bottom: 1px solid #9CA3AF;
+            padding: 0 0 25px 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 20px;
             flex-wrap: wrap;
         }}
-        
+
         .search-wrapper {{
             flex: 0 0 45%;
             min-width: 300px;
             max-width: 500px;
         }}
-        
+
         .search-box {{
             width: 100%;
-            padding: 15px 20px;
-            border: 2px solid #9CA3AF;
+            padding: 12px 20px;
+            border: 2px solid var(--lunar-gray);
             border-radius: 25px;
             font-size: 16px;
+            font-family: 'Poppins', sans-serif;
             outline: none;
             transition: all 0.3s ease;
-            background: #0C0A1D;
-            color: #F8F6FF;
+            background: var(--spacesuit-white);
+            color: var(--lunar-gray);
         }}
-        
+
         .search-box:focus {{
-            border-color: #F8F6FF;
-            box-shadow: 0 0 0 3px rgba(248, 246, 255, 0.1);
+            border-color: var(--graph-purple);
+            box-shadow: 0 0 0 3px rgba(111, 76, 255, 0.1);
         }}
-        
+
         .search-box::placeholder {{
-            color: #9CA3AF;
+            color: var(--lunar-gray);
+            opacity: 0.5;
         }}
-        
+
         .filter-wrapper {{
             display: flex;
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
         }}
-        
+
         .legend {{
-            padding: 20px 30px;
-            background: #0C0A1D;
-            border-bottom: 1px solid #9CA3AF;
+            padding: 20px 0 30px 0;
         }}
-        
+
         .legend-title {{
-            color: #F8F6FF;
+            color: var(--lunar-gray);
             font-size: 14px;
             font-weight: 600;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             text-align: center;
         }}
-        
+
         .legend-items {{
             display: flex;
             gap: 20px;
             flex-wrap: wrap;
             justify-content: center;
         }}
-        
+
         .legend-item {{
             display: flex;
             align-items: center;
             gap: 8px;
             font-size: 13px;
         }}
-        
+
         .legend-badge {{
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-weight: 500;
-            font-size: 11px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 12px;
+            font-family: 'Poppins', sans-serif;
         }}
         
         .legend-badge.good {{
-            background: rgba(34, 197, 94, 0.2);
-            color: #22c55e;
-            border: 1px solid #22c55e;
+            background: rgba(75, 202, 129, 0.15);
+            color: #4BCA81;
+            border: 1px solid var(--graph-green);
         }}
-        
+
         .legend-badge.grace {{
-            background: rgba(251, 191, 36, 0.2);
-            color: #fbbf24;
-            border: 1px solid #fbbf24;
+            background: rgba(255, 168, 1, 0.15);
+            color: #FFA801;
+            border: 1px solid var(--graph-yellow);
         }}
-        
+
         .legend-badge.ineligible {{
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-            border: 1px solid #ef4444;
+            background: rgba(237, 74, 109, 0.15);
+            color: #ED34A6D;
+            border: 1px solid var(--graph-red);
         }}
-        
+
         .legend-description {{
-            color: #9CA3AF;
+            color: var(--lunar-gray);
+            font-size: 12px;
+            opacity: 0.7;
         }}
-        
+
         .gip-banner {{
             padding: 15px 30px;
-            background: #0C0A1D;
-            border-bottom: 1px solid #9CA3AF;
+            background: rgba(111, 76, 255, 0.08);
+            border-bottom: 1px solid rgba(111, 76, 255, 0.16);
             text-align: center;
             font-size: 14px;
-            color: #9CA3AF;
+            color: var(--lunar-gray);
+            border-radius: 8px;
+            margin-bottom: 20px;
         }}
-        
+
         .gip-banner a {{
-            color: #9CA3AF;
+            color: var(--graph-purple);
             text-decoration: none;
+            font-weight: 600;
             transition: color 0.3s ease;
         }}
-        
+
         .gip-banner a:hover {{
-            color: #F8F6FF;
+            color: var(--graph-blue);
             text-decoration: underline;
         }}
-        
+
         .counters-section {{
-            padding: 25px 30px;
-            background: #0C0A1D;
-            border-bottom: 1px solid #9CA3AF;
+            padding: 0 0 30px 0;
             display: flex;
             justify-content: space-around;
             align-items: center;
@@ -1599,7 +1600,7 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             gap: 20px;
             overflow: visible;
         }}
-        
+
         .counter-item {{
             display: flex;
             flex-direction: column;
@@ -1607,16 +1608,16 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             gap: 8px;
             position: relative;
         }}
-        
+
         .counter-label {{
-            color: #9CA3AF;
+            color: var(--lunar-gray);
             font-size: 14px;
             font-weight: 500;
             text-align: center;
             cursor: help;
             position: relative;
         }}
-        
+
         .counter-label[data-tooltip]::after {{
             content: attr(data-tooltip);
             position: absolute;
@@ -1625,8 +1626,8 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             transform: translateX(-50%);
             margin-bottom: 8px;
             padding: 8px 12px;
-            background: #1a1825;
-            color: #F8F6FF;
+            background: var(--galaxy-dark);
+            color: var(--spacesuit-white);
             font-size: 12px;
             font-weight: 400;
             white-space: nowrap;
@@ -1634,15 +1635,15 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.2s ease;
-            border: 1px solid #9CA3AF;
+            border: 1px solid rgba(111, 76, 255, 0.3);
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             z-index: 9999;
         }}
-        
+
         .counter-label[data-tooltip]:hover::after {{
             opacity: 1;
         }}
-        
+
         .counter-label[data-tooltip]::before {{
             content: '';
             position: absolute;
