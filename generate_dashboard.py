@@ -443,35 +443,30 @@ def get_eligibility_period(contract_address: str, rpc_manager: Optional[RoundRob
 
 
 def save_ens_cache_db(ens_mapping: dict, cache_file: str = 'ens_resolution.json') -> None:
-    """
-    Save ENS resolution data to a cache file.
-    
-    Args:
-        ens_mapping: Dictionary mapping addresses (lowercase) to ENS names
-        cache_file: Path to the cache file
-    """
+    """Wrapper: Saves ENS cache to database."""
     try:
-        current_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
-        
-        ens_resolved_count = len([name for name in ens_mapping.values() if name])
-        
-        cache_data = {
-            "metadata": {
-                "retrieved": current_timestamp,
-                "total_count": len(ens_mapping),
-                "ens_resolved": ens_resolved_count
-            },
-            "ens_resolutions": ens_mapping
-        }
-        
-        with open(cache_file, 'w', encoding='utf-8') as f:
-            json.dump(cache_data, f, indent=2)
-        
-        print(f"✓ ENS cache updated and saved to {cache_file}")
-        print(f"  - Total addresses: {len(ens_mapping)}")
-        print(f"  - ENS names resolved: {ens_resolved_count}")
+        count = save_ens_cache(ens_mapping)
+        resolved_count = len([k for k, v in ens_mapping.items() if v])
+        print(f"✓ ENS cache updated and saved to database")
+        print(f"  - Total addresses: {count}")
+        print(f"  - ENS names resolved: {resolved_count}")
     except Exception as e:
-        print(f"❌ Error saving ENS cache to {cache_file}: {e}")
+        print(f"❌ Error saving ENS cache to database: {e}")
+
+
+def load_ens_cache_db(cache_file: str = 'ens_resolution.json') -> Optional[dict]:
+    """Wrapper: Loads ENS cache from database."""
+    try:
+        ens_mapping = load_ens_cache()
+        if ens_mapping:
+            print(f"✓ Loaded ENS cache from database")
+            print(f"  - Total addresses: {len(ens_mapping)}")
+        else:
+            print(f"ENS cache not found in database")
+        return ens_mapping
+    except Exception as e:
+        print(f"❌ Error loading ENS cache from database: {e}")
+        return None
 
 
 def load_ens_cache(cache_file: str = 'ens_resolution.json') -> Optional[dict]:
@@ -2736,7 +2731,8 @@ def main():
 
     with open('active_indexers.json', 'r') as f:
         indexers_data = json.load(f)
-        indexers_count = len(indexers_data.get('indexers', []))
+        indexers = indexers_data.get('indexers', [])
+        indexers_count = len(indexers)
 
     print(f"Found {indexers_count} indexers")
     
@@ -2790,13 +2786,17 @@ def main():
         print()
     
     html_content = generate_html_dashboard(indexers, contract_address=contract_address, api_key=api_key, rpc_manager=rpc_manager)
-    
-    # Write to index.html
-    with open('index.html', 'w', encoding='utf-8') as file:
+
+    # Write to index.html (in output directory if in production environment)
+    output_dir = os.getenv('REO_OUTPUT_DIR', 'output')
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, 'index.html')
+
+    with open(output_path, 'w', encoding='utf-8') as file:
         file.write(html_content)
-    
-    print("Dashboard generated successfully!")
-    print("Open 'index.html' in your browser to view the dashboard.")
+
+    print(f"Dashboard generated successfully at {output_path}!")
+    print(f"Open '{output_path}' in your browser to view the dashboard.")
     
     # Log execution time
     end_time = datetime.now(timezone.utc)
