@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -138,6 +138,7 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
             "rpc_endpoints": rpc_endpoints,
             "contract_address": addresses.get("42161", {}).get("RewardsEligibilityOracle", {}).get("address", ""),
             "deployment_block": parse_deployment_block_from_registry(addresses, "42161"),
+            "explorer_url": "https://arbiscan.io",
         },
         "testnet": {
             "name": "Arbitrum Sepolia",
@@ -145,6 +146,7 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
             "rpc_endpoints": rpc_endpoints,
             "contract_address": testnet_address,
             "deployment_block": sepolia_deployment_block,
+            "explorer_url": "https://sepolia.arbiscan.io",
         },
     }
 
@@ -2227,7 +2229,7 @@ def generate_html_dashboard(
         }}
         
         tr:hover {{
-            background-color: #1a1825;
+            background-color: rgba(111, 76, 255, 0.08);
         }}
         
         tr:nth-child(even) {{
