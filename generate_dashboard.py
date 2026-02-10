@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -131,12 +131,30 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
     # Use JSON registry address if available, otherwise fallback
     testnet_address = sepolia_address if sepolia_address else "0x62c2305739cc75f19a3a6d52387ceb3690d99a99"
 
+    # Get fallback mainnet address from .env (if GitHub doesn't have it)
+    mainnet_address = addresses.get("42161", {}).get("RewardsEligibilityOracle", {}).get("address", "")
+    if not mainnet_address:
+        # Try to get from environment variable
+        mainnet_address = os.getenv("MAINNET_CONTRACT_ADDRESS", "")
+
+    # Get testnet_new address from .env (for testing alternative deployments)
+    testnet_new_address = os.getenv("TESTNET_NEW_CONTRACT_ADDRESS", "")
+    testnet_new_deployment_block = None
+    if testnet_new_address:
+        # Try to get deployment block from env var
+        testnet_new_block = os.getenv("TESTNET_NEW_DEPLOYMENT_BLOCK", "")
+        if testnet_new_block:
+            try:
+                testnet_new_deployment_block = int(testnet_new_block)
+            except ValueError:
+                testnet_new_deployment_block = None
+
     environments = {
         "mainnet": {
             "name": "Arbitrum One",
             "network_id": 42161,
             "rpc_endpoints": rpc_endpoints,
-            "contract_address": addresses.get("42161", {}).get("RewardsEligibilityOracle", {}).get("address", ""),
+            "contract_address": mainnet_address,
             "deployment_block": parse_deployment_block_from_registry(addresses, "42161"),
             "explorer_url": "https://arbiscan.io",
         },
@@ -149,6 +167,17 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
             "explorer_url": "https://sepolia.arbiscan.io",
         },
     }
+
+    # Add testnet_new environment only if address is configured
+    if testnet_new_address:
+        environments["testnet_new"] = {
+            "name": "Arbitrum Sepolia (New Deployment)",
+            "network_id": 421614,
+            "rpc_endpoints": rpc_endpoints,
+            "contract_address": testnet_new_address,
+            "deployment_block": testnet_new_deployment_block,
+            "explorer_url": "https://sepolia.arbiscan.io",
+        }
 
     return environments
 
