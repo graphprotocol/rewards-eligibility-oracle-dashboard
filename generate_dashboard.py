@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -2607,19 +2607,19 @@ def generate_html_dashboard(
                     </tr>
 """
 
-    html_content += """                </tbody>
+    html_content += f"""                </tbody>
             </table>
         </div>
-        
+
         <div class="stats">
-            <div class="total-count">Total Indexers: <span id="totalCount">""" + str(len(all_indexers)) + """</span></div>
-            <div class="filtered-count">Showing: <span id="filteredCount">""" + str(len(all_indexers)) + """</span></div>
+            <div class="total-count">Total Indexers: <span id="totalCount">{len(all_indexers)}</span></div>
+            <div class="filtered-count">Showing: <span id="filteredCount">{len(all_indexers)}</span></div>
         </div>
     </div>
 
     <script>
         // Multi-environment data
-        const environmentData = """ + (json.dumps(environment_data) if environment_data else "{}") + """;
+        const environmentData = {json.dumps(environment_data) if environment_data else "{}"};
 
         // Current selected environment
         let currentEnvironment = 'testnet';
