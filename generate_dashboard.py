@@ -25,7 +25,198 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.0.19"
+VERSION = "0.1.0"
+
+# GitHub JSON Registry URL for contract addresses
+CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
+
+
+def fetch_contract_addresses() -> dict:
+    """
+    Fetch contract addresses from the GitHub JSON registry.
+
+    Returns:
+        dict: Network IDs mapped to contract addresses
+        e.g., {"42161": {"RewardsEligibilityOracle": {"address": "0x..."}}, ...}
+    """
+    try:
+        response = requests.get(CONTRACT_ADDRESSES_URL, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        # Log successful fetch
+        network_count = len([k for k in data.keys() if k.isdigit()])
+        print(f"✓ Fetched contract addresses from GitHub ({network_count} networks)")
+
+        return data
+    except requests.exceptions.RequestException as e:
+        print(f"⚠ Warning: Failed to fetch contract addresses from GitHub: {e}")
+        print(f"  Will use fallback environment variables")
+        return {}
+    except json.JSONDecodeError as e:
+        print(f"⚠ Warning: Invalid JSON from GitHub registry: {e}")
+        print(f"  Will use fallback environment variables")
+        return {}
+
+
+def parse_contract_address_from_registry(registry: dict, network_id: str) -> Optional[str]:
+    """
+    Parse contract address from registry for a specific network.
+
+    Args:
+        registry: The full addresses.json dict
+        network_id: Network ID as string (e.g., "42161", "421614")
+
+    Returns:
+        Contract address or None if not found
+    """
+    if network_id in registry:
+        network_data = registry[network_id]
+        if "RewardsEligibilityOracle" in network_data:
+            return network_data["RewardsEligibilityOracle"].get("address")
+
+    return None
+
+
+def parse_deployment_block_from_registry(registry: dict, network_id: str) -> Optional[int]:
+    """
+    Parse deployment block number from registry for a specific network.
+
+    Args:
+        registry: The full addresses.json dict
+        network_id: Network ID as string (e.g., "42161", "421614")
+
+    Returns:
+        Deployment block number or None if not found
+    """
+    if network_id in registry:
+        network_data = registry[network_id]
+        if "RewardsEligibilityOracle" in network_data:
+            proxy_deployment = network_data["RewardsEligibilityOracle"].get("proxyDeployment", {})
+            block_number = proxy_deployment.get("blockNumber")
+            if block_number:
+                try:
+                    return int(block_number, 16)  # Convert from hex
+                except (ValueError, TypeError):
+                    return None
+
+    return None
+
+
+def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> dict:
+    """
+    Build the ENVIRONMENTS config dict with dynamic contract addresses and RPC endpoints.
+
+    Args:
+        rpc_manager: Optional RoundRobinRPC instance to get RPC endpoints from
+
+    Returns:
+        dict: ENVIRONMENTS configuration
+    """
+    # Fetch from GitHub JSON
+    addresses = fetch_contract_addresses()
+
+    # Get RPC endpoints from manager if available
+    rpc_endpoints = rpc_manager.get_all() if rpc_manager else []
+
+    environments = {
+        "mainnet": {
+            "name": "Arbitrum One",
+            "network_id": 42161,
+            "rpc_endpoints": rpc_endpoints,
+            "contract_address": addresses.get("42161", {}).get("RewardsEligibilityOracle", {}).get("address", ""),
+            "deployment_block": parse_deployment_block_from_registry(addresses, "42161"),
+        },
+        "testnet": {
+            "name": "Arbitrum Sepolia (Current)",
+            "network_id": 421614,
+            "rpc_endpoints": rpc_endpoints,
+            "contract_address": "0x9BED32d2b562043a426376b99d289fE821f5b04E",
+            "deployment_block": None,
+        },
+        "testnet_new": {
+            "name": "Arbitrum Sepolia (New Deployment)",
+            "network_id": 421614,
+            "rpc_endpoints": rpc_endpoints,
+            "contract_address": "0x62c2305739cc75f19a3a6d52387ceb3690d99a99",
+            "deployment_block": 237961353,
+        },
+    }
+
+    # If new address from JSON, override testnet_new
+    sepolia_address = parse_contract_address_from_registry(addresses, "421614")
+    if sepolia_address:
+        environments["testnet_new"]["contract_address"] = sepolia_address
+        print(f"✓ Fetched testnet contract from JSON: {sepolia_address}")
+
+    return environments
+
+
+# Global placeholder - will be populated in main()
+ENVIRONMENTS = {}
+
+
+def get_block_timestamp(rpc_manager: 'RoundRobinRPC', block_number: int) -> Optional[str]:
+    """
+    Fetch block timestamp for contract deployment.
+
+    Args:
+        rpc_manager: RoundRobinRPC instance to make RPC calls
+        block_number: Block number to fetch timestamp for
+
+    Returns:
+        ISO 8601 timestamp string (UTC) or None if failed
+    """
+    if not block_number or not rpc_manager:
+        return None
+
+    try:
+        # Convert block number to hex
+        block_hex = hex(block_number)
+
+        # Try eth_getBlockByNumber RPC call
+        result = rpc_manager.rpc_call("eth_getBlockByNumber", [block_hex, False], timeout=10)
+
+        if result and isinstance(result, dict):
+            timestamp_hex = result.get("timestamp")
+            if timestamp_hex:
+                # Convert hex timestamp to datetime
+                timestamp_int = int(timestamp_hex, 16)
+                dt = datetime.fromtimestamp(timestamp_int, tz=timezone.utc)
+                return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    except Exception as e:
+        print(f"⚠ Warning: Failed to fetch block {block_number} timestamp: {e}")
+
+    return None
+
+
+def calculate_stats(indexers: List[dict]) -> dict:
+    """
+    Calculate statistics from a list of indexers.
+
+    Args:
+        indexers: List of indexer dicts with status field
+
+    Returns:
+        Dict with counts: eligible, grace, ineligible, total
+    """
+    stats = {
+        "total": len(indexers),
+        "eligible": 0,
+        "grace": 0,
+        "ineligible": 0
+    }
+
+    for indexer in indexers:
+        status = indexer.get("status", "unknown")
+        if status == "eligible-active":
+            stats["eligible"] += 1
+        elif status == "eligible-grace":
+            stats["grace"] += 1
+        else:
+            stats["ineligible"] += 1
+
+    return stats
 
 
 class RoundRobinRPC:
@@ -501,14 +692,14 @@ def load_ens_cache(cache_file: str = 'ens_resolution.json') -> Optional[dict]:
         return None
 
 
-def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexers.json', use_cached_ens: bool = False, contract_address: Optional[str] = None, rpc_manager: Optional[RoundRobinRPC] = None, transaction_hash: Optional[str] = None) -> bool:
+def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexers.json', use_cached_ens: bool = False, contract_address: Optional[str] = None, rpc_manager: Optional[RoundRobinRPC] = None, transaction_hash: Optional[str] = None, network_id: str = 'testnet') -> bool:
     """
     Retrieve the list of active indexers with self stake > 0 from The Graph's network subgraph.
     ENS resolution can be cached or fetched from subgraph based on use_cached_ens parameter.
-    
+
     This function retrieves the list of active indexers. ENS names are either loaded from
     cache or fetched from the ENS subgraph, then saved separately.
-    
+
     Args:
         graph_api_key: The Graph API key for querying the network subgraph
         output_file: Path to the output file (default: active_indexers.json)
@@ -516,7 +707,8 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
         contract_address: The contract address to query oracle update time
         rpc_manager: RoundRobinRPC instance (if None, uses global instance)
         transaction_hash: Transaction hash to store in metadata (optional)
-        
+        network_id: Network identifier for multi-environment support (default: 'testnet')
+
     Returns:
         True if successful, False otherwise
     """
@@ -662,7 +854,8 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
                 "total_count": len(indexers_raw),
                 "last_oracle_update_time": last_oracle_update_time,
                 "eligibility_period": eligibility_period,
-                "transaction_hash": transaction_hash if transaction_hash else None
+                "transaction_hash": transaction_hash if transaction_hash else None,
+                "network_id": network_id
             },
             "indexers": []
         }
@@ -725,21 +918,22 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
         return False
 
 
-def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC] = None, input_file: str = 'active_indexers.json', grace_buffer_hours: int = 24) -> bool:
+def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC] = None, input_file: str = 'active_indexers.json', grace_buffer_hours: int = 24, network_id: str = 'testnet') -> bool:
     """
     Check eligibility for each indexer using a two-pass approach:
     1. First pass: Call isEligible(address) for all indexers and store the result
     2. Second pass: Only for eligible indexers, call getEligibilityRenewalTime(address)
-    
-    Reads indexer addresses from the JSON file and updates each indexer's is_eligible 
+
+    Reads indexer addresses from the JSON file and updates each indexer's is_eligible
     and eligibility_renewal_time fields.
-    
+
     Args:
         contract_address: The contract address (0x9BED32d2b562043a426376b99d289fE821f5b04E)
         rpc_manager: RoundRobinRPC instance (if None, uses global instance)
         input_file: Path to the active_indexers.json file
         grace_buffer_hours: Buffer period in hours to apply before last_oracle_update_time (default: 24)
-        
+        network_id: Network identifier for multi-environment support (default: 'testnet')
+
     Returns:
         True if successful, False otherwise
     """
@@ -974,7 +1168,7 @@ def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC]
         return False
 
 
-def updateStatusChangeDates(current_file: str = 'active_indexers.json', previous_file: str = 'active_indexers_previous_run.json') -> bool:
+def updateStatusChangeDates(current_file: str = 'active_indexers.json', previous_file: str = 'active_indexers_previous_run.json', network_id: str = 'testnet') -> bool:
     """
     Compare the current and previous run files to detect status changes.
     Updates the last_status_change_date field for indexers whose status has changed.
@@ -1067,7 +1261,7 @@ def updateStatusChangeDates(current_file: str = 'active_indexers.json', previous
         return False
 
 
-def logStatusChanges(current_file: str = 'active_indexers.json', previous_file: str = 'active_indexers_previous_run.json', log_file: str = 'activity_log_indexers_status_changes.json') -> bool:
+def logStatusChanges(current_file: str = 'active_indexers.json', previous_file: str = 'active_indexers_previous_run.json', log_file: str = 'activity_log_indexers_status_changes.json', network_id: str = 'testnet') -> bool:
     """
     Track and log status changes for indexers in an activity log file.
     Updates metadata on each run and appends status change entries.
@@ -1274,15 +1468,23 @@ def renderIndexerTable(json_file: str = 'active_indexers.json') -> List[dict]:
         return []
 
 
-def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: str, api_key: Optional[str] = None, rpc_manager: Optional[RoundRobinRPC] = None) -> str:
+def generate_html_dashboard(
+    indexers: List[Tuple[str, str]],
+    contract_address: str,
+    api_key: Optional[str] = None,
+    rpc_manager: Optional[RoundRobinRPC] = None,
+    environment_data: Optional[dict] = None
+) -> str:
     """
-    Generate the HTML dashboard content.
-    
+    Generate the HTML dashboard content with multi-environment support.
+
     Args:
         indexers: List of (address, ens_name) tuples (legacy parameter, not used)
-        contract_address: The Sepolia contract address
+        contract_address: The contract address (for backward compatibility)
         api_key: Arbiscan API key
-        
+        rpc_manager: RPC manager for contract calls
+        environment_data: Dict containing data for all environments
+
     Returns:
         Complete HTML content as string
     """
@@ -1589,6 +1791,141 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
         .gip-banner a:hover {{
             color: var(--graph-blue);
             text-decoration: underline;
+        }}
+
+        /* Environment Toggle Styles */
+        .environment-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(111, 76, 255, 0.1);
+            margin-bottom: 20px;
+        }}
+
+        .environment-select-wrapper {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+
+        .environment-label {{
+            font-weight: 600;
+            color: var(--lunar-gray);
+            font-size: 14px;
+        }}
+
+        .environment-select {{
+            padding: 10px 16px;
+            border: 2px solid var(--graph-purple);
+            border-radius: 8px;
+            background: var(--spacesuit-white);
+            color: var(--lunar-gray);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+            font-family: 'Poppins', sans-serif;
+        }}
+
+        .environment-select:hover {{
+            border-color: var(--graph-blue);
+            box-shadow: 0 0 0 3px rgba(76, 102, 255, 0.1);
+        }}
+
+        .environment-select:focus {{
+            border-color: var(--graph-blue);
+            box-shadow: 0 0 0 3px rgba(76, 102, 255, 0.2);
+        }}
+
+        .environment-indicator {{
+            display: flex;
+            justify-content: flex-end;
+        }}
+
+        .env-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+        }}
+
+        .env-badge.mainnet {{
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+        }}
+
+        .env-badge.testnet {{
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+        }}
+
+        .env-icon {{
+            font-size: 16px;
+        }}
+
+        .env-name {{
+            font-size: 14px;
+        }}
+
+        /* Contract Info Styles */
+        .contract-info {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            padding: 12px 20px;
+            background: rgba(111, 76, 255, 0.05);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: var(--lunar-gray);
+        }}
+
+        .contract-item {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+
+        .contract-info a {{
+            color: var(--graph-purple);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }}
+
+        .contract-info a:hover {{
+            color: var(--graph-blue);
+            text-decoration: underline;
+        }}
+
+        @media (max-width: 768px) {{
+            .environment-header {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+
+            .environment-select-wrapper {{
+                justify-content: space-between;
+            }}
+
+            .environment-indicator {{
+                justify-content: center;
+            }}
+
+            .contract-info {{
+                flex-direction: column;
+                gap: 10px;
+            }}
         }}
 
         .counters-section {{
@@ -2120,6 +2457,30 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
                 <h1>Eligibility Dashboard</h1>
             </div>
             <div class="subtitle">Last Update: {current_time}</div>
+        </div>
+
+        <!-- Environment Toggle -->
+        <div class="environment-header">
+            <div class="environment-select-wrapper">
+                <label for="environment-select" class="environment-label">Environment:</label>
+                <select id="environment-select" class="environment-select" onchange="switchEnvironment(this.value)">
+                    <option value="testnet">Arbitrum Sepolia (Current)</option>
+                    <option value="testnet_new">Arbitrum Sepolia (New)</option>
+                    <option value="mainnet">Arbitrum One (Mainnet)</option>
+                </select>
+            </div>
+            <div class="environment-indicator">
+                <span class="env-badge testnet" id="env-badge">
+                    <span class="env-icon">⚡</span>
+                    <span class="env-name" id="env-name">Arbitrum Sepolia (Testnet)</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Contract Info Display -->
+        <div class="contract-info" id="contract-info">
+            <span class="contract-item">Contract: <a href="#" id="contract-address" target="_blank">Loading...</a></span>
+            <span class="contract-item" id="deployment-info">Deployed: Loading...</span>
         </div>"""
     
     # Calculate counters
@@ -2266,6 +2627,191 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
     </div>
 
     <script>
+        // Multi-environment data
+        const environmentData = """ + (json.dumps(environment_data) if environment_data else "{}") + """;
+
+        // Current selected environment
+        let currentEnvironment = 'testnet';
+
+        // Format timestamp for display
+        function formatTimestamp(isoString) {{
+            if (!isoString) return 'Unknown';
+            const date = new Date(isoString);
+            return date.toLocaleString('en-US', {{
+                year: 'numeric',
+                month: 'short',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'UTC'
+            }}) + ' UTC';
+        }}
+
+        // Switch environment function
+        function switchEnvironment(envKey) {{
+            const data = environmentData[envKey];
+            if (!data) {{
+                console.error('Environment not found:', envKey);
+                return;
+            }}
+
+            currentEnvironment = envKey;
+
+            // Update counters
+            const stats = data.stats || {{}};
+            const totalCount = document.getElementById('totalCount');
+            const eligibleCount = document.querySelector('.eligible-count');
+            const graceCount = document.querySelector('.grace-count');
+            const ineligibleCount = document.querySelector('.ineligible-count');
+
+            if (totalCount) totalCount.textContent = stats.total || 0;
+            if (eligibleCount) eligibleCount.textContent = stats.eligible || 0;
+            if (graceCount) graceCount.textContent = stats.grace || 0;
+            if (ineligibleCount) ineligibleCount.textContent = stats.ineligible || 0;
+
+            // Update contract info
+            const contractInfo = data.contract_info || {{}};
+            const contractAddressEl = document.getElementById('contract-address');
+            const deploymentInfoEl = document.getElementById('deployment-info');
+
+            if (contractAddressEl && contractInfo.address) {{
+                const shortAddress = contractInfo.address.substring(0, 10) + '...' + contractInfo.address.substring(38);
+                contractAddressEl.textContent = shortAddress;
+                contractAddressEl.href = `${{data.config.explorer_url}}/address/${{contractInfo.address}}`;
+            }}
+
+            if (deploymentInfoEl && contractInfo.deployment_block) {{
+                const deploymentTime = contractInfo.deployment_time ? formatTimestamp(contractInfo.deployment_time) : 'Unknown';
+                deploymentInfoEl.textContent = `Deployed: ${{deploymentTime}} (Block ${{contractInfo.deployment_block}})`;
+            }}
+
+            // Update environment indicator
+            updateEnvironmentIndicator(data.config?.name || envKey, envKey);
+
+            // Re-render table with new environment's data
+            if (data.indexers && data.indexers.length > 0) {{
+                renderIndexerTable(data.indexers);
+            }} else {{
+                // Show empty state
+                renderEmptyState(envKey);
+            }}
+
+            // Save preference to localStorage
+            localStorage.setItem('selectedEnvironment', envKey);
+        }}
+
+        // Update environment indicator badge
+        function updateEnvironmentIndicator(envName, envKey) {{
+            const badge = document.getElementById('env-badge');
+            const envNameEl = document.getElementById('env-name');
+
+            if (!badge || !envNameEl) return;
+
+            // Remove existing classes and add appropriate one
+            badge.classList.remove('mainnet', 'testnet');
+            badge.classList.add(envKey === 'mainnet' ? 'mainnet' : 'testnet');
+
+            envNameEl.textContent = envName;
+        }}
+
+        // Render indexer table for specific environment
+        function renderIndexerTable(indexers) {{
+            const tableBody = document.getElementById('tableBody');
+            if (!tableBody) return;
+
+            tableBody.innerHTML = '';
+
+            // Sort indexers: eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified
+            const statusPriority = {{
+                'eligible-active': 0,
+                'eligible-grace': 1,
+                'ineligible-expired': 2,
+                'ineligible-unqualified': 3
+            }};
+
+            const sortedIndexers = [...indexers].sort((a, b) => {{
+                const statusA = statusPriority[a.status] ?? 4;
+                const statusB = statusPriority[b.status] ?? 4;
+                if (statusA !== statusB) return statusA - statusB;
+                const ensA = (a.ens_name || 'zzzzzzzzz').toLowerCase();
+                const ensB = (b.ens_name || 'zzzzzzzzz').toLowerCase();
+                return ensA.localeCompare(ensB);
+            }});
+
+            for (const indexer of sortedIndexers) {{
+                const address = indexer.address || '';
+                const ensName = indexer.ens_name || '';
+                const status = indexer.status || 'ineligible-unqualified';
+                const renewalTimeShort = indexer.eligibility_renewal_time_short || 'Never';
+                const renewalTimeReadable = indexer.eligibility_renewal_time_readable || 'Never';
+                const eligibleUntilShort = indexer.eligible_until_short || '';
+                const eligibleUntilReadable = indexer.eligible_until_readable || '';
+                const lastRenewedTx = indexer.last_renewed_on_tx || '';
+
+                let statusBadge;
+                if (status === 'eligible-active') {{
+                    statusBadge = '<span class="legend-badge good">Active</span>';
+                }} else if (status === 'eligible-grace') {{
+                    statusBadge = '<span class="legend-badge grace">Eligible - Grace</span>';
+                }} else if (status === 'ineligible-expired') {{
+                    statusBadge = '<span class="legend-badge ineligible">Expired</span>';
+                }} else {{
+                    statusBadge = '<span class="legend-badge ineligible">Unqualified</span>';
+                }}
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><a href="https://sepolia.arbiscan.io/address/${{address}}" target="_blank">${{address.substring(0, 10)}}...${{address.substring(38)}}</a></td>
+                    <td>${{ensName || '-'}}</td>
+                    <td>${{statusBadge}}</td>
+                    <td title="${{renewalTimeReadable}}">${{renewalTimeShort}}</td>
+                    <td title="${{eligibleUntilReadable}}">${{eligibleUntilShort || '-'}}</td>
+                `;
+                tableBody.appendChild(row);
+            }}
+
+            // Update filtered count
+            const filteredCount = document.getElementById('filteredCount');
+            if (filteredCount) {{
+                filteredCount.textContent = indexers.length;
+            }}
+        }}
+
+        // Render empty state when environment has no data
+        function renderEmptyState(envKey) {{
+            const tableBody = document.getElementById('tableBody');
+            if (!tableBody) return;
+
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 40px; color: var(--lunar-gray);">
+                        <div style="font-size: 48px; margin-bottom: 10px;">📭</div>
+                        <div style="font-size: 18px; font-weight: 600;">No Data Available</div>
+                        <div style="font-size: 14px; margin-top: 5px;">
+                            ${{envKey === 'mainnet' ? 'Mainnet deployment coming soon.' : 'No indexers found for this environment.'}}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }}
+
+        // Initialize environment on page load
+        document.addEventListener('DOMContentLoaded', () => {{
+            // Get saved environment or default to testnet
+            const saved = localStorage.getItem('selectedEnvironment') || 'testnet';
+
+            // Check if saved environment exists in data
+            if (environmentData[saved]) {{
+                document.getElementById('environment-select').value = saved;
+                switchEnvironment(saved);
+            }} else {{
+                // Fall back to first available environment
+                const firstEnv = Object.keys(environmentData)[0] || 'testnet';
+                document.getElementById('environment-select').value = firstEnv;
+                switchEnvironment(firstEnv);
+            }}
+        }});
+
         // Table data
         const originalData = [
 """
@@ -2674,14 +3220,14 @@ def generate_html_dashboard(indexers: List[Tuple[str, str]], contract_address: s
 
 
 def main():
-    """Main function to generate the dashboard."""
+    """Main function to generate the multi-environment dashboard."""
     start_time = datetime.now(timezone.utc)
     print("=" * 70)
     print(f"Script started at {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print("=" * 70)
     print()
-    print("Generating Eligibility Dashboard...")
-    
+    print("Generating Multi-Environment Eligibility Dashboard...")
+
     # Check if .env file exists
     env_file_path = '.env'
     if os.path.exists(env_file_path):
@@ -2694,104 +3240,177 @@ def main():
         print("    1. Copy .env.example to .env")
         print("    2. Edit .env with your API keys")
         print()
-    
-    # Load environment variables (no hardcoded fallbacks)
+
+    # Load environment variables
     graph_api_key = os.getenv("GRAPH_API_KEY")
     use_cached_ens = os.getenv("USE_CACHED_ENS", "N").upper() == "Y"
-    contract_address = os.getenv("CONTRACT_ADDRESS")
     api_key = os.getenv("ARBISCAN_API_KEY")
     grace_buffer_hours = int(os.getenv("GRACE_BUFFER_PERIOD_HOURS", "24"))
-    
+
+    # Fallback contract address (if JSON fetch fails)
+    fallback_contract_address = os.getenv("CONTRACT_ADDRESS")
+
     # Initialize round-robin RPC manager
     rpc_manager = get_rpc_manager()
-    
-    # Get transaction hash first (before retrieving active indexers)
-    # Always fetch fresh data, don't use cached JSON for initial metadata
-    transaction_hash = None
-    if contract_address and api_key:
-        # Fetch transaction data via Arbiscan API
-        last_transaction = get_last_transaction(contract_address, api_key)
-        
-        # Fallback to cached JSON if API fails
-        if not last_transaction:
-            print("⚠ Warning: Could not fetch fresh transaction data from API, using cached data")
-            last_transaction = get_last_transaction_from_json()
-        
-        if last_transaction:
-            transaction_hash = last_transaction.get("hash")
-    
-    # Retrieve active indexers by querying network subgraph
-    if graph_api_key and graph_api_key != "your_graph_api_key_here":
-        print()
-        print("=" * 60)
-        if use_cached_ens:
-            print("🔄 ENS Cache Mode: ENABLED")
-            print("   Using cached ENS data from ens_resolution.json")
-        else:
-            print("🌐 ENS Cache Mode: DISABLED")
-            print("   Fetching fresh ENS data from subgraph")
-        print("=" * 60)
-        print()
-        retrieveActiveIndexers(graph_api_key, use_cached_ens=use_cached_ens, contract_address=contract_address, rpc_manager=rpc_manager, transaction_hash=transaction_hash)
-        print()
-    else:
-        print("⚠ GRAPH_API_KEY not set, skipping active indexers retrieval")
-        print()
-    
-    # Read indexer data from active_indexers.json (generated by retrieveActiveIndexers)
-    if not os.path.exists('active_indexers.json'):
-        print("❌ Error: active_indexers.json not found!")
-        print("   The indexer retrieval may have failed. Check the logs above for errors.")
-        return
 
-    with open('active_indexers.json', 'r') as f:
-        indexers_data = json.load(f)
-        indexers = indexers_data.get('indexers', [])
-        indexers_count = len(indexers)
-
-    print(f"Found {indexers_count} indexers")
-    
-    # Validate required environment variables
-    missing_vars = []
-    if not contract_address:
-        missing_vars.append("CONTRACT_ADDRESS")
-    if not api_key:
-        missing_vars.append("ARBISCAN_API_KEY")
+    # Validate RPC endpoints
     if not rpc_manager.endpoints:
-        missing_vars.append("RPC_ENDPOINT or RPC_ENDPOINT_1, RPC_ENDPOINT_2, etc.")
-    
-    if missing_vars:
-        print("❌ Error: Required environment variables are missing:")
-        for var in missing_vars:
-            print(f"  - {var}")
-        print()
-        print("Please set these variables in your .env file.")
-        print("For RPC endpoints, you can use:")
-        print("  - RPC_ENDPOINT (single endpoint, backward compatible)")
-        print("  - RPC_ENDPOINT_1, RPC_ENDPOINT_2, etc. (multiple endpoints for round-robin)")
-        print("See .env.example for the required format.")
+        print("❌ Error: No RPC endpoints configured")
+        print("Please set RPC_ENDPOINT or RPC_ENDPOINT_1, RPC_ENDPOINT_2, etc. in your .env file")
         return
-    
+
     print("✓ Configuration loaded successfully")
     print()
-    
-    # Check eligibility for each indexer by calling the contract
-    checkEligibility(contract_address, rpc_manager=rpc_manager, grace_buffer_hours=grace_buffer_hours)
+
+    # Initialize ENVIRONMENTS with RPC manager
+    global ENVIRONMENTS
+    ENVIRONMENTS = get_environments_config(rpc_manager)
+
+    # Validate we have at least one environment with a contract address
+    valid_environments = {k: v for k, v in ENVIRONMENTS.items() if v.get('contract_address')}
+    if not valid_environments:
+        # Use fallback if no valid addresses from JSON
+        if fallback_contract_address:
+            print(f"⚠ Warning: No contract addresses from JSON, using fallback CONTRACT_ADDRESS")
+            ENVIRONMENTS['testnet']['contract_address'] = fallback_contract_address
+            valid_environments = {'testnet': ENVIRONMENTS['testnet']}
+        else:
+            print("❌ Error: No contract addresses available and no CONTRACT_ADDRESS fallback")
+            return
+
+    print(f"✓ Processing {len(valid_environments)} environment(s): {', '.join(valid_environments.keys())}")
     print()
-    
-    # Update status change dates by comparing with previous run
-    updateStatusChangeDates()
-    print()
-    
-    # Log status changes to activity log
-    logStatusChanges()
-    print()
-    
-    # Send Telegram notifications about oracle update and status changes
-    if TELEGRAM_AVAILABLE:
+
+    # Validate API key
+    if not graph_api_key or graph_api_key == "your_graph_api_key_here":
+        print("⚠ GRAPH_API_KEY not set, skipping active indexers retrieval")
+        print()
+
+    # Multi-environment data storage
+    environment_data = {}
+
+    # Process each environment
+    for env_key, env_config in valid_environments.items():
+        print("=" * 70)
+        print(f"Processing {env_config['name']} (Network ID: {env_config['network_id']})")
+        print(f"Contract: {env_config['contract_address']}")
+        print("=" * 70)
+        print()
+
+        # Environment-specific file paths
+        output_file = f"active_indexers_{env_key}.json"
+        previous_file = f"active_indexers_{env_key}_previous_run.json"
+        log_file = f"activity_log_indexers_status_changes_{env_key}.json"
+
+        # Initialize environment data
+        environment_data[env_key] = {
+            "config": env_config,
+            "indexers": [],
+            "stats": {},
+            "contract_info": {
+                "address": env_config['contract_address'],
+                "deployment_block": env_config.get('deployment_block'),
+                "deployment_time": None
+            }
+        }
+
+        # Get deployment timestamp if deployment block is known
+        if env_config.get('deployment_block'):
+            deployment_time = get_block_timestamp(rpc_manager, env_config['deployment_block'])
+            environment_data[env_key]["contract_info"]["deployment_time"] = deployment_time
+            if deployment_time:
+                print(f"✓ Contract deployment time: {deployment_time}")
+
+        # Retrieve active indexers for this environment
+        if graph_api_key and graph_api_key != "your_graph_api_key_here":
+            print()
+            if use_cached_ens:
+                print("🔄 ENS Cache Mode: ENABLED")
+            else:
+                print("🌐 ENS Cache Mode: DISABLED")
+            print()
+
+            transaction_hash = None
+            if api_key and env_config['contract_address']:
+                # Try to get last transaction for this environment
+                last_transaction = get_last_transaction(env_config['contract_address'], api_key)
+                if last_transaction:
+                    transaction_hash = last_transaction.get("hash")
+
+            retrieveActiveIndexers(
+                graph_api_key,
+                output_file=output_file,
+                use_cached_ens=use_cached_ens,
+                contract_address=env_config['contract_address'],
+                rpc_manager=rpc_manager,
+                transaction_hash=transaction_hash,
+                network_id=env_key
+            )
+            print()
+
+        # Check if indexer file was created
+        if not os.path.exists(output_file):
+            print(f"⚠ Warning: {output_file} not found, skipping {env_key}")
+            continue
+
+        # Read indexer data
+        with open(output_file, 'r') as f:
+            indexers_data = json.load(f)
+            indexers = indexers_data.get('indexers', [])
+            environment_data[env_key]["indexers"] = indexers
+
+        print(f"Found {len(indexers)} indexers for {env_key}")
+
+        # Check eligibility for this environment
+        if env_config['contract_address']:
+            checkEligibility(
+                env_config['contract_address'],
+                rpc_manager=rpc_manager,
+                input_file=output_file,
+                grace_buffer_hours=grace_buffer_hours,
+                network_id=env_key
+            )
+            print()
+
+        # Update status change dates
+        updateStatusChangeDates(
+            current_file=output_file,
+            previous_file=previous_file,
+            network_id=env_key
+        )
+        print()
+
+        # Log status changes
+        logStatusChanges(
+            current_file=output_file,
+            previous_file=previous_file,
+            log_file=log_file,
+            network_id=env_key
+        )
+        print()
+
+        # Calculate stats
+        # Re-read the file to get updated eligibility data
+        with open(output_file, 'r') as f:
+            updated_data = json.load(f)
+            updated_indexers = updated_data.get('indexers', [])
+            environment_data[env_key]["indexers"] = updated_indexers
+            environment_data[env_key]["stats"] = calculate_stats(updated_indexers)
+
+        print(f"✓ {env_key} stats: {environment_data[env_key]['stats']}")
+        print()
+
+    # Send Telegram notifications (only once, using testnet data)
+    if TELEGRAM_AVAILABLE and 'testnet' in environment_data:
         try:
             print("Sending Telegram notifications...")
-            telegram_notifier.send_notifications()
+            # Temporarily copy testnet data to default location for notifier
+            if os.path.exists('active_indexers_testnet.json'):
+                import shutil
+                shutil.copy('active_indexers_testnet.json', 'active_indexers.json')
+                if os.path.exists('active_indexers_testnet_previous_run.json'):
+                    shutil.copy('active_indexers_testnet_previous_run.json', 'active_indexers_previous_run.json')
+                telegram_notifier.send_notifications()
             print()
         except Exception as e:
             print(f"⚠ Warning: Could not send Telegram notifications: {e}")
@@ -2799,8 +3418,30 @@ def main():
     else:
         print("ℹ️ Telegram notifications disabled (module not available)")
         print()
-    
-    html_content = generate_html_dashboard(indexers, contract_address=contract_address, api_key=api_key, rpc_manager=rpc_manager)
+
+    # Generate HTML with all environment data
+    print("=" * 70)
+    print("Generating HTML dashboard...")
+    print("=" * 70)
+    print()
+
+    # Use the first available environment's contract address for backward compatibility
+    first_env = list(environment_data.keys())[0] if environment_data else 'testnet'
+    if first_env in environment_data:
+        env_data = environment_data[first_env]
+        contract_address = env_data['contract_info']['address']
+        print(f"Using {first_env} contract address: {contract_address}")
+    else:
+        # Fallback to environment variable
+        contract_address = os.getenv("CONTRACT_ADDRESS", "")
+
+    html_content = generate_html_dashboard(
+        [],  # Empty list - function reads from file
+        contract_address=contract_address,
+        api_key=api_key,
+        rpc_manager=rpc_manager,
+        environment_data=environment_data
+    )
 
     # Write to index.html (in output directory if in production environment)
     output_dir = os.getenv('REO_OUTPUT_DIR', 'output')
@@ -2812,7 +3453,7 @@ def main():
 
     print(f"Dashboard generated successfully at {output_path}!")
     print(f"Open '{output_path}' in your browser to view the dashboard.")
-    
+
     # Log execution time
     end_time = datetime.now(timezone.utc)
     duration = (end_time - start_time).total_seconds()
