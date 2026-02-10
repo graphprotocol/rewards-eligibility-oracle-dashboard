@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -2484,9 +2484,7 @@ def generate_html_dashboard(
                 <div class="environment-select-wrapper">
                     <label for="environment-select" class="environment-label">Environment:</label>
                     <select id="environment-select" class="environment-select" onchange="switchEnvironment(this.value)">
-                        <option value="testnet">Arbitrum Sepolia (Current)</option>
-                        <option value="testnet_new">Arbitrum Sepolia (New)</option>
-                        <option value="mainnet">Arbitrum One (Mainnet)</option>
+                        <!-- Options will be populated dynamically by JavaScript -->
                     </select>
                 </div>
                 <!-- Environment Indicator -->
@@ -2867,6 +2865,30 @@ def generate_html_dashboard(
         }}
 
         // Initialize environment on page load
+        // Populate environment select options dynamically
+        const envSelect = document.getElementById('environment-select');
+        if (envSelect) {{
+            // Clear existing options
+            envSelect.innerHTML = '';
+
+            // Populate with available environments
+            for (const [envKey, envData] of Object.entries(environmentData)) {{
+                const option = document.createElement('option');
+                option.value = envKey;
+                option.textContent = envData.config?.name || envKey;
+                envSelect.appendChild(option);
+            }}
+
+            // If no environments available, show message
+            if (Object.keys(environmentData).length === 0) {{
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No environments available';
+                option.disabled = true;
+                envSelect.appendChild(option);
+            }}
+        }}
+
         document.addEventListener('DOMContentLoaded', () => {{
             // Get saved environment or default to testnet
             const saved = localStorage.getItem('selectedEnvironment') || 'testnet';
