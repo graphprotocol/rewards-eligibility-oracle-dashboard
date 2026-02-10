@@ -99,6 +99,45 @@ docker compose up -d --force-recreate reo reo-scheduler
 # 7. Verify new version is running
 docker exec reo-scheduler-prod python -c "import generate_dashboard; print(generate_dashboard.VERSION)"
 
+# 8. CRITICAL: Always restart the scheduler after pulling new images!
+# The scheduler runs continuously and regenerates the dashboard every 5 minutes.
+# Simply pulling the image does NOT update running containers!
+# You must use --force-recreate or explicitly restart the scheduler:
+docker compose up -d --force-recreate reo-scheduler
+
+# 9. Verify the dashboard was regenerated with the new code
+docker exec dashboards-caddy grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" /usr/share/nginx/html/reo/index.html | head -1
+
+# 10. Test in browser
+# Open https://hub.thegraph.foundation/reo/ and verify the changes
+```
+
+### Why Restarting the Scheduler is Critical
+
+**Common mistake**: Pulling the image and recreating `reo` container, but forgetting `reo-scheduler`.
+
+- The `reo` container is a **one-shot** container that runs once and exits
+- The `reo-scheduler` container runs **continuously** and regenerates the dashboard every 5 minutes
+- When you pull a new image, only NEW containers get the new code
+- The scheduler is already running, so it keeps using the OLD cached image
+- **Result**: Production shows old version even though you "deployed" the new code
+
+**How to verify if scheduler is using old code**:
+```bash
+# Check the version in the running scheduler container
+docker exec reo-scheduler-prod python -c "import generate_dashboard; print(generate_dashboard.VERSION)"
+
+# Compare with the latest image
+docker run --rm ghcr.io/graphprotocol/rewards-eligibility-oracle-dashboard:latest python -c "import generate_dashboard; print(generate_dashboard.VERSION)"
+
+# If they don't match, you need to restart the scheduler!
+```
+
+### Key Takeaway
+**Always restart the scheduler after deploying new code.** The scheduler won't pick up new code until it's restarted, and the dashboard it generates will continue using the old version.
+
+Use this mnemonic: **"Pull one, restart both"** - When you pull the `reo` image, restart BOTH `reo` AND `reo-scheduler`.
+
 # 8. Check logs
 docker logs reo-scheduler-prod --tail 20
 
