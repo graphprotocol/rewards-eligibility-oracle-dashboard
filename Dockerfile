@@ -34,7 +34,6 @@ ENV PATH=/root/.local/bin:$PATH
 COPY generate_dashboard.py .
 COPY telegram_bot.py .
 COPY telegram_notifier.py .
-COPY announce_update.py .
 COPY scheduler.py .
 COPY database.py .
 
