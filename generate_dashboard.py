@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -1842,6 +1842,37 @@ def generate_html_dashboard(
             box-shadow: 0 0 0 3px rgba(76, 102, 255, 0.2);
         }}
 
+        .update-controls {{
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }}
+
+        .contract-info-inline {{
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 14px;
+        }}
+
+        .contract-info-inline .contract-item {{
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+
+        .contract-info-inline a {{
+            color: var(--graph-blue);
+            text-decoration: none;
+            font-weight: 500;
+        }}
+
+        .contract-info-inline a:hover {{
+            text-decoration: underline;
+        }}
+
         .environment-indicator {{
             display: flex;
             justify-content: flex-end;
@@ -2444,34 +2475,37 @@ def generate_html_dashboard(
 <body>
     <div class="container">
         <div class="header">
-            <div class="title-container">
-                <h1>REO Eligibility Dashboard</h1>
-            </div>
-            <div class="subtitle">Last Update: {current_time}</div>
-        </div>
+            <h1>🍪 REO</h1>
+            <p class="subtitle">Rewards Eligibility Oracle - GIP-0079 Indexer Rewards</p>
 
-        <!-- Environment Toggle -->
-        <div class="environment-header">
-            <div class="environment-select-wrapper">
-                <label for="environment-select" class="environment-label">Environment:</label>
-                <select id="environment-select" class="environment-select" onchange="switchEnvironment(this.value)">
-                    <option value="testnet">Arbitrum Sepolia (Current)</option>
-                    <option value="testnet_new">Arbitrum Sepolia (New)</option>
-                    <option value="mainnet">Arbitrum One (Mainnet)</option>
-                </select>
-            </div>
-            <div class="environment-indicator">
-                <span class="env-badge testnet" id="env-badge">
-                    <span class="env-icon">⚡</span>
-                    <span class="env-name" id="env-name">Arbitrum Sepolia (Testnet)</span>
+            <!-- Environment & Info Controls -->
+            <div class="update-controls">
+                <!-- Environment Toggle -->
+                <div class="environment-select-wrapper">
+                    <label for="environment-select" class="environment-label">Environment:</label>
+                    <select id="environment-select" class="environment-select" onchange="switchEnvironment(this.value)">
+                        <option value="testnet">Arbitrum Sepolia (Current)</option>
+                        <option value="testnet_new">Arbitrum Sepolia (New)</option>
+                        <option value="mainnet">Arbitrum One (Mainnet)</option>
+                    </select>
+                </div>
+                <!-- Environment Indicator -->
+                <div class="environment-indicator">
+                    <span class="env-badge testnet" id="env-badge">
+                        <span class="env-icon">⚡</span>
+                        <span class="env-name" id="env-name">Arbitrum Sepolia (Testnet)</span>
+                    </span>
+                </div>
+                <!-- Contract Info Display -->
+                <div class="contract-info-inline" id="contract-info">
+                    <span class="contract-item">Contract: <a href="#" id="contract-address" target="_blank">Loading...</a></span>
+                    <span class="contract-item" id="deployment-info">Deployed: Loading...</span>
+                </div>
+                <!-- Last Update -->
+                <span class="update-time" style="font-size: 0.85em; opacity: 0.7;">
+                    Last updated: {current_time}
                 </span>
             </div>
-        </div>
-
-        <!-- Contract Info Display -->
-        <div class="contract-info" id="contract-info">
-            <span class="contract-item">Contract: <a href="#" id="contract-address" target="_blank">Loading...</a></span>
-            <span class="contract-item" id="deployment-info">Deployed: Loading...</span>
         </div>"""
     
     # Calculate counters
