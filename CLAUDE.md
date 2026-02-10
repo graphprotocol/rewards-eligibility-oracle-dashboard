@@ -8,6 +8,78 @@ This is a **Python-based static dashboard** for monitoring The Graph Protocol's 
 
 **Key Architecture**: Pure Python script (no web framework) → generates static `index.html` → deployed to static hosting. The script runs periodically via cron to update eligibility data from smart contracts.
 
+## CRITICAL: Deployment Warnings
+
+**READ BEFORE DEPLOYING**: This section contains critical deployment lessons learned that are not obvious.
+
+### Docker Image Caching Issue
+
+⚠️ **The standard deployment commands will NOT pull new images due to Docker caching:**
+
+```bash
+# THIS DOES NOT WORK AS EXPECTED:
+docker compose pull reo reo-scheduler
+docker compose up -d reo reo-scheduler
+# Containers will keep using the OLD cached image!
+```
+
+**Always force pull images before deployment:**
+```bash
+# Force pull the latest image (ignores local cache)
+docker pull ghcr.io/graphprotocol/rewards-eligibility-oracle-dashboard:latest
+
+# Verify the image was actually updated
+docker images ghcr.io/graphprotocol/rewards-eligibility-oracle-dashboard --format "{{.CreatedAt}}"
+
+# Force recreate containers with the new image
+docker compose up -d --force-recreate reo reo-scheduler
+
+# Verify the version in the running container
+docker exec reo-scheduler-prod python -c "import generate_dashboard; print(generate_dashboard.VERSION)"
+```
+
+### GitHub Actions Timing
+
+⚠️ **After merging a PR, the `:latest` image is NOT immediately available:**
+
+1. PR workflow creates `:pr-<number>` tag only (not `:latest`)
+2. After merge, wait for `main` branch workflow to complete (~30-40 seconds)
+3. Only the `main` branch workflow pushes the `:latest` tag
+4. **Verify workflow completed before deploying:**
+   ```bash
+   gh run list --branch main --limit 1
+   # Wait for "completed success" status
+   ```
+
+### Production Testing Requirements
+
+⚠️ **HTML grep checks are NOT sufficient for UI changes:**
+
+Just verifying HTML contains certain strings doesn't mean the feature works:
+- ❌ `grep "environment-select"` - Only checks HTML exists
+- ✅ **Open in actual browser** - Click toggle, verify it works
+- ✅ **Check browser console** - No JavaScript errors
+- ✅ **Test localStorage** - Refresh page, verify persistence
+
+**For any UI change, you MUST test in a real browser before considering deployment complete.**
+
+### Full Deployment Checklist
+
+Before calling deployment "done", verify:
+
+- [ ] Waited for main branch workflow to complete
+- [ ] Force pulled new Docker image
+- [ ] Verified image timestamp is recent
+- [ ] Force recreated containers
+- [ ] Verified version number in running container
+- [ ] Opened production URL in browser
+- [ ] Checked browser console for errors
+- [ ] Tested new functionality works
+- [ ] Tested old functionality still works (regression)
+- [ ] Verified visual changes match expectations
+
+**See `DEPLOYMENT_LESSONS_LEARNED.md` for detailed explanations and examples.**
+
 ## Development Commands
 
 ### Running the Dashboard
