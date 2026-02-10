@@ -107,6 +107,8 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
     """
     Build the ENVIRONMENTS config dict with dynamic contract addresses and RPC endpoints.
 
+    Production configuration with two environments: mainnet and testnet.
+
     Args:
         rpc_manager: Optional RoundRobinRPC instance to get RPC endpoints from
 
@@ -119,6 +121,13 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
     # Get RPC endpoints from manager if available
     rpc_endpoints = rpc_manager.get_all() if rpc_manager else []
 
+    # Get Sepolia address from JSON registry
+    sepolia_address = parse_contract_address_from_registry(addresses, "421614")
+    sepolia_deployment_block = parse_deployment_block_from_registry(addresses, "421614")
+
+    # Use JSON registry address if available, otherwise fallback
+    testnet_address = sepolia_address if sepolia_address else "0x62c2305739cc75f19a3a6d52387ceb3690d99a99"
+
     environments = {
         "mainnet": {
             "name": "Arbitrum One",
@@ -128,26 +137,13 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
             "deployment_block": parse_deployment_block_from_registry(addresses, "42161"),
         },
         "testnet": {
-            "name": "Arbitrum Sepolia (Current)",
+            "name": "Arbitrum Sepolia",
             "network_id": 421614,
             "rpc_endpoints": rpc_endpoints,
-            "contract_address": "0x9BED32d2b562043a426376b99d289fE821f5b04E",
-            "deployment_block": None,
-        },
-        "testnet_new": {
-            "name": "Arbitrum Sepolia (New Deployment)",
-            "network_id": 421614,
-            "rpc_endpoints": rpc_endpoints,
-            "contract_address": "0x62c2305739cc75f19a3a6d52387ceb3690d99a99",
-            "deployment_block": 237961353,
+            "contract_address": testnet_address,
+            "deployment_block": sepolia_deployment_block,
         },
     }
-
-    # If new address from JSON, override testnet_new
-    sepolia_address = parse_contract_address_from_registry(addresses, "421614")
-    if sepolia_address:
-        environments["testnet_new"]["contract_address"] = sepolia_address
-        print(f"✓ Fetched testnet contract from JSON: {sepolia_address}")
 
     return environments
 

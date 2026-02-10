@@ -18,7 +18,7 @@ set -e
 # Script directory and paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-HTML_FILE="${PROJECT_ROOT}/index.html"
+HTML_FILE="${PROJECT_ROOT}/output/index.html"
 SCREENSHOT_DIR="${PROJECT_ROOT}/test_screenshots"
 
 # Create screenshots directory
@@ -90,7 +90,7 @@ test_environment_toggle_visibility() {
     SNAPSHOT=$(agent-browser snapshot -i 2>/dev/null || echo "")
 
     # Verify dropdown exists
-    if echo "$SNAPSHOT" | grep -q "environment-select"; then
+    if echo "$SNAPSHOT" | grep -q "Environment:"; then
         print_result "Environment dropdown found" "pass"
     else
         print_result "Environment dropdown not found" "fail"

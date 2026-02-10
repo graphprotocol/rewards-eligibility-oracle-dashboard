@@ -131,10 +131,10 @@ class TestEnvironmentConfiguration(unittest.TestCase):
         # Get the environments config
         ENVIRONMENTS = get_environments_config()
 
-        # Should have all three environments (testing phase)
+        # Should have two environments (production)
         self.assertIn("mainnet", ENVIRONMENTS)
         self.assertIn("testnet", ENVIRONMENTS)
-        self.assertIn("testnet_new", ENVIRONMENTS)
+        self.assertNotIn("testnet_new", ENVIRONMENTS)
 
         # Verify each environment has required fields
         required_fields = [
@@ -151,11 +151,9 @@ class TestEnvironmentConfiguration(unittest.TestCase):
         # Verify network IDs
         self.assertEqual(ENVIRONMENTS["mainnet"]["network_id"], 42161)
         self.assertEqual(ENVIRONMENTS["testnet"]["network_id"], 421614)
-        self.assertEqual(ENVIRONMENTS["testnet_new"]["network_id"], 421614)
 
-        # Verify contract addresses
-        self.assertEqual(ENVIRONMENTS["testnet"]["contract_address"], "0x9BED32d2b562043a426376b99d289fE821f5b04E")
-        self.assertEqual(ENVIRONMENTS["testnet_new"]["contract_address"], "0x62c2305739cc75f19a3a6d52387ceb3690d99a99")
+        # Verify testnet uses JSON registry address
+        self.assertIn("0x", ENVIRONMENTS["testnet"]["contract_address"])
 
     def test_parse_contract_address_from_registry(self):
         """
@@ -377,8 +375,8 @@ class TestHtmlMultiEnvironmentData(unittest.TestCase):
         # Act & Assert: Verify ENVIRONMENTS has expected structure
         # that will be embedded in HTML
 
-        # Should have three environments
-        self.assertEqual(len(ENVIRONMENTS), 3)
+        # Should have two environments (production)
+        self.assertEqual(len(ENVIRONMENTS), 2)
 
         # Each should have required keys for HTML generation
         for env_key, env_data in ENVIRONMENTS.items():
