@@ -36,6 +36,7 @@ COPY telegram_bot.py .
 COPY telegram_notifier.py .
 COPY announce_update.py .
 COPY scheduler.py .
+COPY database.py .
 
 # Create output directory for generated HTML
 RUN mkdir -p /app/output
