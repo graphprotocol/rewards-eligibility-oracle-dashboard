@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.7"
+VERSION = "0.1.8"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -1598,6 +1598,7 @@ def generate_html_dashboard(
             --graph-gray: #494755;
             --galaxy-dark: #0C0A1D;
             --spacesuit-white: #F8F6FF;
+            --lunar-gray: #1a1a2e;
         }}
 
         * {{
@@ -1900,7 +1901,7 @@ def generate_html_dashboard(
             align-items: center;
             gap: 15px;
             flex-wrap: wrap;
-            margin-top: 15px;
+            margin-top: 30px;
         }}
 
         .contract-info-inline {{
@@ -2404,8 +2405,8 @@ def generate_html_dashboard(
         
         .footer {{
             padding: 20px 30px;
-            background: #0C0A1D;
-            color: #9CA3AF;
+            background: rgba(248, 246, 255, 0.8);
+            color: var(--lunar-gray);
             font-size: 14px;
             margin-top: 0;
         }}
@@ -2539,13 +2540,6 @@ def generate_html_dashboard(
                     <select id="environment-select" class="environment-select" onchange="switchEnvironment(this.value)">
                         <!-- Options will be populated dynamically by JavaScript -->
                     </select>
-                </div>
-                <!-- Environment Indicator -->
-                <div class="environment-indicator">
-                    <span class="env-badge testnet" id="env-badge">
-                        <span class="env-icon">⚡</span>
-                        <span class="env-name" id="env-name">Arbitrum Sepolia (Testnet)</span>
-                    </span>
                 </div>
                 <!-- Contract Info Display -->
                 <div class="contract-info-inline" id="contract-info">
@@ -2761,9 +2755,6 @@ def generate_html_dashboard(
                 deploymentInfoEl.textContent = `Deployed: ${{deploymentTime}} (Block ${{contractInfo.deployment_block}})`;
             }}
 
-            // Update environment indicator
-            updateEnvironmentIndicator(data.config?.name || envKey, envKey);
-
             // Re-render table with new environment's data
             if (data.indexers && data.indexers.length > 0) {{
                 renderIndexerTable(data.indexers, data.config?.explorer_url || 'https://sepolia.arbiscan.io');
@@ -2820,20 +2811,6 @@ def generate_html_dashboard(
 
             // Save preference to localStorage
             localStorage.setItem('selectedEnvironment', envKey);
-        }}
-
-        // Update environment indicator badge
-        function updateEnvironmentIndicator(envName, envKey) {{
-            const badge = document.getElementById('env-badge');
-            const envNameEl = document.getElementById('env-name');
-
-            if (!badge || !envNameEl) return;
-
-            // Remove existing classes and add appropriate one
-            badge.classList.remove('mainnet', 'testnet');
-            badge.classList.add(envKey === 'mainnet' ? 'mainnet' : 'testnet');
-
-            envNameEl.textContent = envName;
         }}
 
         // Render indexer table for specific environment
@@ -2928,7 +2905,10 @@ def generate_html_dashboard(
             for (const [envKey, envData] of Object.entries(environmentData)) {{
                 const option = document.createElement('option');
                 option.value = envKey;
-                option.textContent = envData.config?.name || envKey;
+                const contractAddress = envData.contract_info?.address || '';
+                const shortAddress = contractAddress ? `${{contractAddress.substring(0, 8)}}...${{contractAddress.substring(38)}}` : '';
+                const name = envData.config?.name || envKey;
+                option.textContent = shortAddress ? `${{name}} ({{shortAddress}})` : name;
                 envSelect.appendChild(option);
             }}
 
