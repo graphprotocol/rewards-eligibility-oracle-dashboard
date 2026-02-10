@@ -1,9 +1,75 @@
 {
   "metadata": {
-    "last_check": "2026-02-10 20:19:30 UTC",
+    "last_check": "2026-02-10 20:49:32 UTC",
     "last_oracle_update_time": 1770717627
   },
   "status_changes": [
+    {
+      "address": "0x0b9d582b7fdd387ba13ad7f453d49af255a8ed5e",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0x0ee85c30ff1797d9f041261b88c4a58d6d68fbbf",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0x17def1a43a323c711c7a32101ecf41e58eff54a2",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0x269ebeee083ce6f70486a67dc8036a889bf322a9",
+      "previous_status": "ineligible-expired",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0x2e15f3f0d37b191c33ee06e953c8cce4c493b47a",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0x51637a35f7f054c98ed51904de939b9561d37885",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0xa181d0f242b3730f8a244cc94eda05faf17a43e8",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0xc9014686f6336ad558b539565d5dff840b339082",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0xda20dde459c8d918f81566995d899a046d4d8503",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0xdc7daef4d0751a9f6ec28b06d6d9475b13eb0918",
+      "previous_status": "ineligible-expired",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0xdecba5154aab37ae5e381a19f804f3af4d1bcbb5",
+      "previous_status": "ineligible-expired",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-02-10"
+    },
     {
       "address": "0x0b9d582b7fdd387ba13ad7f453d49af255a8ed5e",
       "previous_status": "ineligible-expired",

@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.9"
+VERSION = "0.2.0"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -3253,8 +3253,9 @@ def generate_html_dashboard(
         renderTable();
         updateStats();
     </script>
+    </div>
 """
-    
+
     # Add legend section before footer (commented out - using filter section instead)
     # html_content += """
     # <div class="legend">
@@ -3275,8 +3276,8 @@ def generate_html_dashboard(
     #     </div>
     # </div>
     # """
-    
-    # Add metadata section before footer
+
+    # Add metadata section (outside container, before footer)
     html_content += """
     <div class="metadata-section">
         <div class="metadata-content">
