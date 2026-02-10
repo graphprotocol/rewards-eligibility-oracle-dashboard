@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -96,9 +96,12 @@ def parse_deployment_block_from_registry(registry: dict, network_id: str) -> Opt
             block_number = proxy_deployment.get("blockNumber")
             if block_number:
                 try:
-                    return int(block_number, 16)  # Convert from hex
+                    return int(block_number, 16)  # Try hex first
                 except (ValueError, TypeError):
-                    return None
+                    try:
+                        return int(block_number)  # Fallback to decimal
+                    except (ValueError, TypeError):
+                        return None
 
     return None
 
@@ -2135,16 +2138,16 @@ def generate_html_dashboard(
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
-            background: #0C0A1D;
+            background: rgba(248, 246, 255, 0.95);
             border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            border: 1px solid #9CA3AF;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border: 1px solid rgba(111, 76, 255, 0.2);
         }}
-        
+
         th {{
-            background: #0C0A1D;
-            color: #9CA3AF;
+            background: rgba(111, 76, 255, 0.1);
+            color: var(--lunar-gray);
             padding: 20px 15px;
             text-align: left;
             font-weight: 600;
@@ -2154,11 +2157,11 @@ def generate_html_dashboard(
             cursor: pointer;
             user-select: none;
             position: relative;
-            border-bottom: 1px solid #9CA3AF;
+            border-bottom: 1px solid rgba(111, 76, 255, 0.2);
         }}
         
         th:hover {{
-            background: #1a1825;
+            background: rgba(111, 76, 255, 0.15);
         }}
         
         th.sortable::after {{
@@ -2179,9 +2182,9 @@ def generate_html_dashboard(
         
         td {{
             padding: 18px 15px;
-            border-bottom: 1px solid #9CA3AF;
+            border-bottom: 1px solid rgba(111, 76, 255, 0.15);
             font-size: 14px;
-            color: #F8F6FF;
+            color: var(--lunar-gray);
         }}
         
         /* Date hover tooltip styles */
@@ -2228,17 +2231,17 @@ def generate_html_dashboard(
         }}
         
         tr:nth-child(even) {{
-            background-color: #0C0A1D;
+            background-color: rgba(111, 76, 255, 0.05);
         }}
-        
+
         tr:nth-child(even):hover {{
-            background-color: #1a1825;
+            background-color: rgba(111, 76, 255, 0.08);
         }}
         
         .address {{
             font-family: 'Courier New', monospace;
             font-size: 13px;
-            color: #F8F6FF;
+            color: var(--lunar-gray);
             word-break: break-all;
         }}
         
@@ -2281,10 +2284,10 @@ def generate_html_dashboard(
             justify-content: space-between;
             align-items: center;
             padding: 20px 30px;
-            background: #0C0A1D;
-            border-top: 1px solid #9CA3AF;
+            background: rgba(248, 246, 255, 0.95);
+            border-top: 1px solid rgba(111, 76, 255, 0.2);
             font-size: 14px;
-            color: #F8F6FF;
+            color: var(--lunar-gray);
         }}
         
         .total-count {{
@@ -2437,20 +2440,10 @@ def generate_html_dashboard(
     </style>
 </head>
 <body>
-    <div class="breadcrumb">
-        <a href="../index.html">
-            <span class="home-icon"></span>
-            <b>Home</b>
-        </a>
-        <span class="breadcrumb-separator">>></span>
-        <span>REO Eligibility Dashboard</span>
-    </div>
-    
     <div class="container">
         <div class="header">
             <div class="title-container">
-                <img src="grt.png" alt="GRT" class="header-icon">
-                <h1>Eligibility Dashboard</h1>
+                <h1>REO Eligibility Dashboard</h1>
             </div>
             <div class="subtitle">Last Update: {current_time}</div>
         </div>
@@ -2686,11 +2679,57 @@ def generate_html_dashboard(
 
             // Re-render table with new environment's data
             if (data.indexers && data.indexers.length > 0) {{
-                renderIndexerTable(data.indexers);
+                renderIndexerTable(data.indexers, data.config?.explorer_url || 'https://sepolia.arbiscan.io');
             }} else {{
                 // Show empty state
                 renderEmptyState(envKey);
             }}
+
+            // Update originalData for search functionality
+            originalData = [];
+            if (data.indexers && data.indexers.length > 0) {{
+                // Sort indexers: eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified
+                const statusPriority = {{
+                    'eligible-active': 0,
+                    'eligible-grace': 1,
+                    'ineligible-expired': 2,
+                    'ineligible-unqualified': 3
+                }};
+
+                const sortedIndexers = [...data.indexers].sort((a, b) => {{
+                    const statusA = statusPriority[a.status] ?? 4;
+                    const statusB = statusPriority[b.status] ?? 4;
+                    if (statusA !== statusB) return statusA - statusB;
+                    const ensA = (a.ens_name || 'zzzzzzzzz').toLowerCase();
+                    const ensB = (b.ens_name || 'zzzzzzzzz').toLowerCase();
+                    return ensA.localeCompare(ensB);
+                }});
+
+                for (const indexer of sortedIndexers) {{
+                    const address = indexer.address || '';
+                    const ensName = indexer.ens_name || '';
+                    const status = indexer.status || 'ineligible-unqualified';
+                    const renewalTimeShort = indexer.eligibility_renewal_time_short || 'Never';
+                    const renewalTimeReadable = indexer.eligibility_renewal_time_readable || 'Never';
+                    const eligibleUntilShort = indexer.eligible_until_short || '';
+                    const eligibleUntilReadable = indexer.eligible_until_readable || '';
+                    const lastRenewedTx = indexer.last_renewed_on_tx || '';
+
+                    let statusBadge;
+                    if (status === 'eligible-active') {{
+                        statusBadge = '<span class="legend-badge good">Active</span>';
+                    }} else if (status === 'eligible-grace') {{
+                        statusBadge = '<span class="legend-badge grace">Eligible - Grace</span>';
+                    }} else if (status === 'ineligible-expired') {{
+                        statusBadge = '<span class="legend-badge ineligible">Expired</span>';
+                    }} else {{
+                        statusBadge = '<span class="legend-badge ineligible">Unqualified</span>';
+                    }}
+
+                    originalData.push([address, ensName, statusBadge, renewalTimeShort, renewalTimeReadable, eligibleUntilShort, eligibleUntilReadable, status, lastRenewedTx]);
+                }}
+            }}
+            currentData = [...originalData];
 
             // Save preference to localStorage
             localStorage.setItem('selectedEnvironment', envKey);
@@ -2711,7 +2750,7 @@ def generate_html_dashboard(
         }}
 
         // Render indexer table for specific environment
-        function renderIndexerTable(indexers) {{
+        function renderIndexerTable(indexers, explorerUrl = 'https://sepolia.arbiscan.io') {{
             const tableBody = document.getElementById('tableBody');
             if (!tableBody) return;
 
@@ -2757,7 +2796,7 @@ def generate_html_dashboard(
 
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td><a href="https://sepolia.arbiscan.io/address/${{address}}" target="_blank">${{address.substring(0, 10)}}...${{address.substring(38)}}</a></td>
+                    <td><a href="${{explorerUrl}}/address/${{address}}" target="_blank">${{address.substring(0, 10)}}...${{address.substring(38)}}</a></td>
                     <td>${{ensName || '-'}}</td>
                     <td>${{statusBadge}}</td>
                     <td title="${{renewalTimeReadable}}">${{renewalTimeShort}}</td>

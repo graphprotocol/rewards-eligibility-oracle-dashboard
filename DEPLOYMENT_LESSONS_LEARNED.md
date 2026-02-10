@@ -288,6 +288,83 @@ docker exec <container> python -c "import <module>; print(<module>.VERSION)"
 
 ---
 
-**Last Updated:** 2026-02-10 (After v0.1.0 deployment)
+## Creating Releases
+
+### Version Tagging and Release Workflow
+
+The repository includes an automated GitHub release workflow (`.github/workflows/release.yml`) that creates GitHub releases when version tags are pushed.
+
+#### How to Create a Release
+
+1. **Update version in `generate_dashboard.py`:**
+   ```python
+   VERSION = "0.1.1"  # Increment as needed
+   ```
+
+2. **Commit and push changes:**
+   ```bash
+   git add .
+   git commit -m "Bump version to 0.1.1: Fix block number parsing and UI issues"
+   git push origin main
+   ```
+
+3. **Wait for GitHub Actions workflow to complete** (builds and pushes Docker image)
+
+4. **Create and push version tag:**
+   ```bash
+   git tag -a v0.1.1 -m "Release v0.1.1: Fix block number parsing and UI issues"
+   git push origin v0.1.1
+   ```
+
+5. **GitHub Actions will automatically:**
+   - Generate changelog from commits since last tag
+   - Create GitHub Release with changelog
+   - Docker image is already built from step 3
+
+#### Version Increment Rules (Semantic Versioning)
+
+- **PATCH** (0.0.X): Bug fixes, small improvements, documentation updates
+  - Example: `v0.1.0` → `v0.1.1` (Fix deployment timestamp display)
+- **MINOR** (0.X.0): New features, backward-compatible changes
+  - Example: `v0.1.0` → `v0.2.0` (Add mainnet environment support)
+- **MAJOR** (X.0.0): Breaking changes, incompatible API changes
+  - Example: `v0.1.0` → `v1.0.0` (Stable production release)
+
+#### Release Workflow Details
+
+The release workflow (`release.yml`) runs when tags matching `v*.*.*` are pushed:
+
+1. **Checkout code** with full history
+2. **Extract version** from tag reference
+3. **Generate changelog** from commits since last tag
+4. **Create GitHub Release** with:
+   - Release name: `Release v0.1.1`
+   - Tag: `v0.1.1`
+   - Changelog: Auto-generated from commit messages
+
+#### After Creating a Release
+
+1. **Verify GitHub Release** was created: https://github.com/graphprotocol/rewards-eligibility-oracle-dashboard/releases
+
+2. **Deploy to production** following the deployment workflow:
+   ```bash
+   # Navigate to infrastructure
+   cd /home/pdiogo/hosted-apps/repos/dashboard-infrastructure
+
+   # Force pull the new image
+   docker pull ghcr.io/graphprotocol/rewards-eligibility-oracle-dashboard:latest
+
+   # Force recreate containers
+   docker compose up -d --force-recreate reo reo-scheduler
+
+   # Verify new version
+   docker exec reo-scheduler-prod python -c "import generate_dashboard; print(generate_dashboard.VERSION)"
+   ```
+
+3. **Test production** using the production testing checklist above
+
+---
+
+**Last Updated:** 2026-02-10 (After v0.1.0 deployment, added release workflow docs)
 **Deployment Version:** v0.1.0
 **Status:** Lessons documented and actionable
