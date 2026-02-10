@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.6"
+VERSION = "0.1.7"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -176,6 +176,30 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
             "rpc_endpoints": rpc_endpoints,
             "contract_address": testnet_new_address,
             "deployment_block": testnet_new_deployment_block,
+            "explorer_url": "https://sepolia.arbiscan.io",
+        }
+
+    # Add testnet_old environment (implementation address) for comparison
+    # This allows comparing current proxy deployment with previous implementation
+    testnet_old_address = addresses.get("421614", {}).get("RewardsEligibilityOracle", {}).get("implementation", "")
+    testnet_old_deployment_block = None
+    if testnet_old_address:
+        # Try to get deployment block from implementation deployment
+        impl_deployment = addresses.get("421614", {}).get("RewardsEligibilityOracle", {}).get("implementationDeployment", {})
+        testnet_old_deployment_block = impl_deployment.get("blockNumber")
+        if testnet_old_deployment_block:
+            try:
+                testnet_old_deployment_block = int(testnet_old_deployment_block)
+            except (ValueError, TypeError):
+                testnet_old_deployment_block = None
+
+    if testnet_old_address:
+        environments["testnet_old"] = {
+            "name": "Arbitrum Sepolia (Previous Implementation)",
+            "network_id": 421614,
+            "rpc_endpoints": rpc_endpoints,
+            "contract_address": testnet_old_address,
+            "deployment_block": testnet_old_deployment_block,
             "explorer_url": "https://sepolia.arbiscan.io",
         }
 
