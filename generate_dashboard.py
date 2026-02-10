@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.1.8"
+VERSION = "0.1.9"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -2402,7 +2402,54 @@ def generate_html_dashboard(
         .transaction-hash:hover .external-link-icon {{
             opacity: 1;
         }}
-        
+
+        /* Metadata Section */
+        .metadata-section {{
+            padding: 15px 30px;
+            background: rgba(111, 76, 255, 0.03);
+            border-top: 1px solid rgba(111, 76, 255, 0.1);
+            border-bottom: 1px solid rgba(111, 76, 255, 0.1);
+            margin-top: 30px;
+        }}
+
+        .metadata-content {{
+            max-width: 1140px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }}
+
+        .metadata-item {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }}
+
+        .metadata-label {{
+            color: var(--lunar-gray);
+            font-weight: 500;
+        }}
+
+        .metadata-value {{
+            color: var(--graph-purple);
+        }}
+
+        .metadata-value a {{
+            color: var(--graph-purple);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }}
+
+        .metadata-value a:hover {{
+            color: var(--graph-blue);
+            text-decoration: underline;
+        }}
+
         .footer {{
             padding: 20px 30px;
             background: rgba(248, 246, 255, 0.8);
@@ -3229,8 +3276,24 @@ def generate_html_dashboard(
     # </div>
     # """
     
+    # Add metadata section before footer
+    html_content += """
+    <div class="metadata-section">
+        <div class="metadata-content">
+            <div class="metadata-item">
+                <span class="metadata-label">Eligibility Criteria:</span>
+                <span class="metadata-value"><a href="https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734" target="_blank">TBD (see GIP-0079)</a></span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Data Source:</span>
+                <span class="metadata-value"><a href="https://github.com/graphprotocol/contracts/blob/main/packages/issuance/addresses.json" target="_blank">GitHub JSON Registry (Contract Addresses)</a></span>
+            </div>
+        </div>
+    </div>
+    """
+
     # Add footer with version, GitHub link, and Telegram bot
-    html_content += f"""    
+    html_content += f"""
     <div class="footer">
         <div class="footer-content">
             <div class="footer-top">
