@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.0] - 2026-02-10
+
+### Added
+- **Multi-Environment Support** - Dashboard now supports multiple network environments
+  - Environment toggle switch in UI (mainnet, testnet)
+  - Dynamic data loading based on selected environment
+  - SQLite database schema upgraded for environment-aware data storage
+  - Environment-specific indexer tracking and eligibility checking
+  - Frontend localStorage preference for environment selection persistence
+- **Contract Address Registry** - Automatic contract address resolution from GitHub
+  - Fetches contract addresses from `graphprotocol/contracts` repository
+  - Supports any network with published contract addresses
+  - Eliminates hardcoded contract addresses
+- **Scheduler Service** - Automated periodic dashboard regeneration
+  - Configurable refresh intervals per environment
+  - Graceful shutdown support
+  - Database-backed state management for scheduler coordination
+
+### Changed
+- **Database Schema** - Migrated to environment-aware storage
+  - Added `environment` column to indexers, eligibility_log, and sync_state tables
+  - Migration system for upgrading existing databases
+  - Separate indexer tracking per environment
+- **Configuration** - Environment variables now support multiple networks
+  - `ENVIRONMENTS` configuration for enabled networks
+  - Per-environment RPC endpoints, subgraph deployments, and explorer URLs
+  - Default environment selection
+
+### Technical
+- Upgraded database.py with schema versioning and migrations
+- Added scheduler.py for automated dashboard updates
+- Frontend JavaScript updated for dynamic environment switching
+- All eligibility checks now environment-aware
+
+---
+
 ## [0.0.18] - 2025-11-25
 
 ### Added
