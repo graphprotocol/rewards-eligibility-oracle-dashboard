@@ -3382,7 +3382,7 @@ def generate_html_dashboard(
         function renderTable() {
             tableBody.innerHTML = '';
             currentData.forEach((row, index) => {
-                const [address, ensName, status, lastRenewedShort, lastRenewedFull, eligibleUntilShort, eligibleUntilFull, statusString, lastRenewedOnTx] = row;
+                const [address, ensName, status, lastRenewedShort, lastRenewedFull, eligibleUntilShort, eligibleUntilFull, statusString, lastRenewedOnTx, streakDays] = row;
                 const ensDisplay = ensName || 'No ENS';
                 const ensClass = ensName ? 'ens-name' : 'empty-ens';
                 const explorerUrl = `https://thegraph.com/explorer/profile/${address}?view=Indexing&chain=arbitrum-one`;
