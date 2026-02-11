@@ -25,7 +25,7 @@ from database import (
 )
 
 # Version of the dashboard generator
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 # GitHub JSON Registry URL for contract addresses
 CONTRACT_ADDRESSES_URL = "https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json"
@@ -2087,7 +2087,7 @@ def generate_html_dashboard(
         }}
         
         .counter-value {{
-            color: #F8F6FF;
+            color: var(--lunar-gray);
             font-size: 32px;
             font-weight: 600;
             text-align: center;
@@ -2597,6 +2597,20 @@ def generate_html_dashboard(
                 <span class="update-time" style="font-size: 0.85em; opacity: 0.7;">
                     Last updated: {current_time}
                 </span>
+
+                <!-- Metadata Section -->
+                <div class="metadata-section" style="margin-top: 15px; padding: 12px 20px; background: rgba(111, 76, 255, 0.05); border-radius: 8px;">
+                    <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; font-size: 13px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--lunar-gray); font-weight: 500;">Eligibility Criteria:</span>
+                            <span><a href="https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">TBD (see GIP-0079)</a></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--lunar-gray); font-weight: 500;">Data Source:</span>
+                            <span><a href="https://github.com/graphprotocol/contracts/blob/main/packages/issuance/addresses.json" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">GitHub JSON Registry</a></span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>"""
     
@@ -2955,7 +2969,7 @@ def generate_html_dashboard(
                 const contractAddress = envData.contract_info?.address || '';
                 const shortAddress = contractAddress ? `${{contractAddress.substring(0, 8)}}...${{contractAddress.substring(38)}}` : '';
                 const name = envData.config?.name || envKey;
-                option.textContent = shortAddress ? `${{name}} ({{shortAddress}})` : name;
+                option.textContent = shortAddress ? `${{name}} (${{shortAddress}})` : name;
                 envSelect.appendChild(option);
             }}
 
@@ -3276,22 +3290,6 @@ def generate_html_dashboard(
     #     </div>
     # </div>
     # """
-
-    # Add metadata section (outside container, before footer)
-    html_content += """
-    <div class="metadata-section">
-        <div class="metadata-content">
-            <div class="metadata-item">
-                <span class="metadata-label">Eligibility Criteria:</span>
-                <span class="metadata-value"><a href="https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734" target="_blank">TBD (see GIP-0079)</a></span>
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Data Source:</span>
-                <span class="metadata-value"><a href="https://github.com/graphprotocol/contracts/blob/main/packages/issuance/addresses.json" target="_blank">GitHub JSON Registry (Contract Addresses)</a></span>
-            </div>
-        </div>
-    </div>
-    """
 
     # Add footer with version, GitHub link, and Telegram bot
     html_content += f"""
