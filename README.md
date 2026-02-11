@@ -46,7 +46,7 @@ open index.html
 ## Documentation
 
 For AI agents and developers:
-- **Deployment Guide**: [docs/agents/DEPLOYMENT_LESSONS_LEARNED.md](docs/agents/DEPLOYMENT_LESSONS_LEARNED.md)
+- **Deployment Guide**: [docs/agents/DEPLOYMENT.md](docs/agents/DEPLOYMENT.md)
 - **Architecture**: [docs/agents/CLAUDE.md](docs/agents/CLAUDE.md)
 
 ## Telegram Bot (Optional)

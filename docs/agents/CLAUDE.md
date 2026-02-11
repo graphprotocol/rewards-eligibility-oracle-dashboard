@@ -78,7 +78,7 @@ Before calling deployment "done", verify:
 - [ ] Tested old functionality still works (regression)
 - [ ] Verified visual changes match expectations
 
-**See `DEPLOYMENT_LESSONS_LEARNED.md` for detailed explanations and examples.**
+**See `DEPLOYMENT.md` for detailed explanations and examples.**
 
 ## Development Commands
 
