@@ -3239,9 +3239,9 @@ def generate_html_dashboard(
             if (currentSortMode === 'streak') {
                 // Sort by streak days (descending), then status priority, then ENS name
                 currentData.sort((a, b) => {
-                    // Streak is at index 7
-                    const aStreak = a[7] ?? 0;
-                    const bStreak = b[7] ?? 0;
+                    // Streak is at index 9, status is at index 7
+                    const aStreak = a[9] ?? 0;
+                    const bStreak = b[9] ?? 0;
 
                     // First sort by streak (descending)
                     if (aStreak !== bStreak) return bStreak - aStreak;
