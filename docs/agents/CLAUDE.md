@@ -6,37 +6,31 @@ This file provides guidance to AI coding assistants when working with code in th
 
 This is a **Python-based static dashboard** for monitoring The Graph Protocol's Rewards Eligibility Oracle (GIP-0079). The system tracks indexer eligibility for rewards based on service quality metrics, displaying real-time blockchain data in a self-contained HTML dashboard.
 
-**Key Architecture**: Pure Python script (no web framework) → generates static `index.html` → deployed to static hosting. The script runs periodically via cron to update eligibility data from smart contracts.
+**Key Architecture**: Pure Python script (no web framework) → generates static `index.html` → deployed to static hosting via Docker Compose with scheduler that regenerates every 5 minutes.
+
+**Production URL**: https://hub.thegraph.org/reo/
 
 ## CRITICAL: Deployment Warnings
 
 **READ BEFORE DEPLOYING**: This section contains critical deployment lessons learned that are not obvious.
 
-### Docker Image Caching Issue
+### Always Restart the Scheduler
 
-⚠️ **The standard deployment commands will NOT pull new images due to Docker caching:**
+⚠️ **Pulling a new image does NOT update running containers:**
+
+The `reo-scheduler` container runs continuously and regenerates the dashboard every 5 minutes. Simply pulling the image won't update it - you MUST restart the scheduler.
 
 ```bash
-# THIS DOES NOT WORK AS EXPECTED:
-docker compose pull reo reo-scheduler
-docker compose up -d reo reo-scheduler
-# Containers will keep using the OLD cached image!
-```
-
-**Always force pull images before deployment:**
-```bash
-# Force pull the latest image (ignores local cache)
+# Correct deployment workflow:
+cd dashboard-infrastructure/
 docker pull ghcr.io/graphprotocol/rewards-eligibility-oracle-dashboard:latest
-
-# Verify the image was actually updated
-docker images ghcr.io/graphprotocol/rewards-eligibility-oracle-dashboard --format "{{.CreatedAt}}"
-
-# Force recreate containers with the new image
 docker compose up -d --force-recreate reo reo-scheduler
 
-# Verify the version in the running container
-docker exec reo-scheduler-prod python -c "import generate_dashboard; print(generate_dashboard.VERSION)"
+# Verify the version in production
+docker exec dashboards-caddy grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" /usr/share/nginx/html/reo/index.html | head -1
 ```
+
+**Mnemonic: "Pull one, restart both"** - When you pull the `reo` image, restart BOTH `reo` AND `reo-scheduler`.
 
 ### GitHub Actions Timing
 
@@ -66,12 +60,10 @@ Just verifying HTML contains certain strings doesn't mean the feature works:
 ### Full Deployment Checklist
 
 Before calling deployment "done", verify:
-
 - [ ] Waited for main branch workflow to complete
 - [ ] Force pulled new Docker image
-- [ ] Verified image timestamp is recent
-- [ ] Force recreated containers
-- [ ] Verified version number in running container
+- [ ] Restarted BOTH `reo` and `reo-scheduler` containers
+- [ ] Verified version in production (via curl or browser)
 - [ ] Opened production URL in browser
 - [ ] Checked browser console for errors
 - [ ] Tested new functionality works
@@ -88,7 +80,7 @@ Before calling deployment "done", verify:
 python3 generate_dashboard.py
 
 # View the generated dashboard
-open index.html  # macOS
+open output/index.html  # macOS
 # or open in browser directly
 ```
 
@@ -102,26 +94,23 @@ cp env.example .env
 # Then edit .env with your actual API keys and endpoints
 ```
 
+### Running Tests
+```bash
+# Run all unit tests
+pytest tests/unit/
+
+# Run specific test file
+pytest tests/unit/test_block_parsing.py -v
+
+# Run integration tests (requires environment setup)
+bash tests/integration/test_frontend_toggle.sh
+```
+
 ### Telegram Bot (Optional)
 ```bash
 # Run the bot 24/7 for user subscriptions
 python3 telegram_bot.py
-
-# Or run via systemd (production)
-sudo systemctl start telegram_bot.service
-sudo systemctl status telegram_bot.service
-
-# View bot logs
-tail -f logs/telegram_bot.log
-# or for systemd
-sudo journalctl -u telegram_bot.service -f
 ```
-
-### Testing/Simulation
-There are **no unit tests** in this codebase. Testing is done by:
-1. Running `generate_dashboard.py` and verifying output in `index.html`
-2. Checking `active_indexers.json` for correct data structure
-3. For Telegram: `python3 telegram_bot.py` and send `/test` command
 
 ## Architecture Overview
 
@@ -139,58 +128,82 @@ Network Subgraph (Active Indexers) → ENS Subgraph (Names) → Oracle Contract 
 1. **Pass 1**: Call `isEligible(address)` for all indexers
 2. **Pass 2**: Call `getEligibilityRenewalTime(address)` only for eligible indexers
 3. **Pass 3**: Determine status by comparing renewal time with oracle update time:
-   - `eligible`: renewal_time == oracle_update_time
-   - `grace`: renewal_time != oracle_update_time AND within 14-day period
-   - `ineligible`: grace period expired
+   - `eligible-active`: renewal_time == oracle_update_time
+   - `eligible-grace`: renewal_time != oracle_update_time AND within grace period
+   - `ineligible-expired`: grace period expired (previously eligible)
+   - `ineligible-unqualified`: never qualified
 
 ### Status System
 
-The dashboard tracks three distinct states (not binary):
-- **Eligible** (green): Actively renewed in latest oracle update
-- **Grace** (yellow): Still eligible but needs action (14-day countdown)
-- **Ineligible** (red): Grace period expired or never qualified
+The dashboard tracks four distinct states:
+- **Eligible-Active** (green): Actively renewed in latest oracle update
+- **Eligible-Grace** (yellow): Still eligible but needs action (14-day countdown)
+- **Ineligible-Expired** (red): Grace period expired (previously eligible)
+- **Ineligible-Unqualified** (red): Never qualified
 
-**Status Change Tracking**: Each run compares with `active_indexers_previous_run.json` to detect transitions and update `last_status_change_date`.
+**Status Change Tracking**: Each run compares with previous run to detect transitions and update `last_status_change_date`.
 
-### File-Based State Management
+### State Management
 
-**No database** - all state stored in JSON files:
+**Hybrid approach** - uses both JSON files and SQLite database:
+
+**JSON files** (for data exchange):
 - `active_indexers.json` - Current indexer data (generated each run)
 - `active_indexers_previous_run.json` - Backup for comparison (auto-created)
 - `ens_resolution.json` - ENS name cache (controlled by `USE_CACHED_ENS` env var)
-- `last_transaction.json` - Cached transaction data for offline capability
 - `activity_log_indexers_status_changes.json` - Cumulative audit log of all status changes
 - `subscribers_telegram.json` - Telegram subscriber database (if bot enabled)
+
+**SQLite database** (for persistent state):
+- `reo.db` - Stores ENS cache, transaction data, and other state across runs
 
 ### Round-Robin RPC Load Balancing
 
 The `RoundRobinRPC` class distributes RPC calls across multiple endpoints:
-- Configure via `RPC_ENDPOINT_1`, `RPC_ENDPOINT_2`, etc. in `.env`
+- Configure via `RPC_ENDPOINT` (single) or `RPC_ENDPOINT_1`, `RPC_ENDPOINT_2`, etc. in `.env`
 - Automatically rotates through available endpoints
 - Falls back to next endpoint on failure
 - Backward compatible with single `RPC_ENDPOINT` variable
 
+### Multi-Environment Support
+
+The dashboard supports multiple contract deployments simultaneously:
+- Environment data fetched from [GitHub JSON Registry](https://raw.githubusercontent.com/graphprotocol/contracts/refs/heads/main/packages/issuance/addresses.json)
+- Contract addresses auto-discovered for each network (Arbitrum One, Arbitrum Sepolia)
+- JavaScript environment toggle switches between deployments client-side
+- Each environment has its own indexer data and eligibility state
+
 ## Key Files
 
-- **`generate_dashboard.py`** (2700+ lines) - Main script containing all logic
+- **`generate_dashboard.py`** (3400+ lines) - Main script containing all logic
   - `retrieveActiveIndexers()` - Fetches from subgraph with ENS resolution
   - `checkEligibility()` - Three-pass contract interaction
   - `updateStatusChangeDates()` - Compares runs to detect changes
   - `logStatusChanges()` - Appends to cumulative activity log
-  - `renderIndexerTable()` - Merges ENS with eligibility data
-  - `generate_html_dashboard()` - Creates self-contained HTML
+  - `generate_html_dashboard()` - Creates self-contained HTML with embedded CSS/JS
+
+- **`scheduler.py`** - Runs continuously, regenerates dashboard every 5 minutes
+  - Reads from `.env` for configuration
+  - Calls `generate_dashboard.py()` on schedule
+  - Logs generation results
 
 - **`telegram_bot.py`** - 24/7 bot service for user subscriptions
-  - Commands: `/start`, `/subscribe`, `/unsubscribe`, `/watch`, `/unwatch`, `/watchlist`, `/status`, `/stats`, `/help`, `/test`
+  - Commands: `/start`, `/watch <address>`, `/unwatch <address>`, `/watchlist`, `/status`, `/help`, `/test`
   - Manages `subscribers_telegram.json`
 
 - **`telegram_notifier.py`** - Notification sender (called by dashboard script)
   - Filters notifications by watched indexers
   - Sends daily summaries via Telegram
 
+- **`database.py`** - SQLite database operations
+  - ENS cache storage and retrieval
+  - Transaction data caching
+  - Schema initialization
+
 - **`env.example`** - Template for `.env` configuration
-  - Required: `CONTRACT_ADDRESS`, `ARBISCAN_API_KEY`, `RPC_ENDPOINT`, `GRAPH_API_KEY`
+  - Required: `ARBISCAN_API_KEY`, `GRAPH_API_KEY`, `RPC_ENDPOINT`
   - Optional: `TELEGRAM_BOT_TOKEN`, `DASHBOARD_URL`, `USE_CACHED_ENS`
+  - Manual environment config: `TESTNET_NEW_CONTRACT_ADDRESS`, `TESTNET_NEW_DEPLOYMENT_BLOCK`
 
 ## Contract Interaction
 
@@ -203,8 +216,8 @@ The `RoundRobinRPC` class distributes RPC calls across multiple endpoints:
 ## Error Handling Strategy
 
 **Graceful degradation** with multiple fallbacks:
-1. Primary: Cached JSON data (offline-capable)
-2. Fallback 1: RPC endpoint (round-robin across multiple)
+1. Primary: RPC endpoint (round-robin across multiple)
+2. Fallback 1: Cached data in SQLite database
 3. Fallback 2: Arbiscan API (transaction data only)
 4. **No mock data** - displays clear error messages when all sources fail
 
@@ -217,8 +230,9 @@ The `RoundRobinRPC` class distributes RPC calls across multiple endpoints:
 
 ### Adding Dashboard Features
 1. HTML generation is in `generate_html_dashboard()` function
-2. CSS is embedded directly (no separate CSS file)
+2. CSS is embedded directly in `<style>` tags (no separate CSS file)
 3. JavaScript for interactivity is embedded in `<script>` tags
+4. For multi-environment support, add to `environments` dict before HTML generation
 
 ### Updating Subgraph Queries
 1. Query in `retrieveActiveIndexers()` function
@@ -228,22 +242,16 @@ The `RoundRobinRPC` class distributes RPC calls across multiple endpoints:
 ### Debugging Contract Calls
 1. Check `active_indexers.json` for raw data
 2. Verify `.env` has correct RPC endpoint
-3. Script prints debug info to console (check cron.log if running via cron)
-4. Use Arbiscan to verify contract state: https://arbiscan.io/address/0x9BED32d2b562043a426376b99d289fE821f5b04E
+3. Script prints debug info to console (check scheduler logs)
+4. Use Arbiscan to verify contract state
 
 ## Deployment
 
-The dashboard is **static HTML** with no backend:
-- Deploy `index.html` to any static hosting (Netlify, GitHub Pages, nginx)
-- No server-side code execution required
-- Script runs on separate server via cron, uploads HTML to static host
+**Production deployment** uses Docker Compose:
+- Separate infrastructure repository: `dashboard-infrastructure`
+- `reo` container: One-shot container that generates dashboard on startup
+- `reo-scheduler` container: Runs continuously, regenerates every 5 minutes
+- `caddy` container: Web server that serves static HTML files
+- Volumes: `reo-output` for generated HTML, `reo-data` for database
 
-Typical cron schedule: Every 30 minutes or hourly
-```bash
-crontab -e
-# Add: */30 * * * * cd /path/to/repo && python3 generate_dashboard.py >> cron.log 2>&1
-```
-
----
-
-See also [agents.md](agents.md) for additional AI coding assistant guidelines specific to this project.
+**For detailed deployment instructions**, see `DEPLOYMENT.md`.
