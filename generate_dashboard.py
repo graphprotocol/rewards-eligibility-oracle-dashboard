@@ -21,7 +21,8 @@ import threading
 from database import (
     save_indexers, get_all_indexers, update_eligibility, log_status_change,
     get_previous_indexers, update_status_changes, save_ens_cache, load_ens_cache,
-    save_transaction, get_last_transaction, update_sync_state, set_metadata, get_metadata
+    save_transaction, get_last_transaction, update_sync_state, set_metadata, get_metadata,
+    calculate_continuous_streak, get_status_change_history
 )
 
 # Version of the dashboard generator
@@ -1204,11 +1205,39 @@ def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC]
         print(f"  - Eligible: {eligible_status_count}")
         print(f"  - Grace: {grace_status_count}")
         print(f"  - Ineligible: {ineligible_status_count}")
-        
+
+        # ========== PASS 4: Log status changes to database ==========
+        print(f"Pass 4: Logging status changes to database...")
+
+        # Load previous indexers from database
+        previous_indexers_db = get_all_indexers(network_id)
+        previous_indexers_map = {
+            idx.get('id', idx.get('address', '')).lower(): idx
+            for idx in previous_indexers_db
+        }
+
+        # Log status changes
+        status_changes_logged = 0
+        for indexer in indexers:
+            address = indexer.get("address", "").lower()
+            current_status = indexer.get("status", "")
+
+            if address in previous_indexers_map:
+                previous_indexer = previous_indexers_map[address]
+                previous_status = previous_indexer.get("status", "")
+
+                if current_status != previous_status:
+                    # Get transaction hash if this indexer renewed in this run
+                    tx_hash = indexer.get("last_renewed_on_tx", "")
+                    log_status_change(address, previous_status, current_status, tx_hash=tx_hash, network_id=network_id)
+                    status_changes_logged += 1
+
+        print(f"✓ Pass 4 complete: {status_changes_logged} status changes logged to database")
+
         # Write updated data back to JSON file
         with open(input_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
-        
+
         print(f"✓ Eligibility check complete:")
         print(f"  - Total indexers: {len(indexers)}")
         print(f"  - Eligible indexers: {eligible_count}")
@@ -1454,16 +1483,18 @@ def read_indexers_data(filename: str = 'indexers.txt') -> List[Tuple[str, str]]:
     return indexers
 
 
-def renderIndexerTable(json_file: str = 'active_indexers.json') -> List[dict]:
+def renderIndexerTable(json_file: str = 'active_indexers.json', network_id: str = 'testnet') -> List[dict]:
     """
     Read all indexers from the active_indexers.json file and merge with ENS data.
     Returns all indexers regardless of eligibility status.
-    
+    Calculates continuous eligibility streaks for all indexers.
+
     Args:
         json_file: Path to the active_indexers.json file
-        
+        network_id: Network identifier for database queries
+
     Returns:
-        List of dictionaries containing all indexer data with ENS names
+        List of dictionaries containing all indexer data with ENS names and streak days
     """
     all_indexers = []
     
@@ -1479,24 +1510,31 @@ def renderIndexerTable(json_file: str = 'active_indexers.json') -> List[dict]:
         
         # Load ENS data from cache
         ens_mapping = load_ens_cache() or {}
-        
+
+        # Get current time for streak calculations
+        current_time = int(datetime.now(timezone.utc).timestamp())
+
         # Process all indexers and merge with ENS data
         eligible_count = 0
         grace_count = 0
         ineligible_count = 0
-        
+
         for indexer in indexers:
             address = indexer.get("address", "")
             address_lower = address.lower()
-            
+
             # Create a copy of the indexer data and add ENS name
             indexer_with_ens = indexer.copy()
             indexer_with_ens["ens_name"] = ens_mapping.get(address_lower, "")
-            
+
             # Use status from JSON file (already calculated by checkEligibility)
             status = indexer.get("status", "ineligible")
             indexer_with_ens["status"] = status
-            
+
+            # Calculate continuous eligibility streak
+            streak_result = calculate_continuous_streak(address, current_time, network_id)
+            indexer_with_ens["continuous_streak_days"] = streak_result["days"]
+
             # Set is_eligible based on status
             if status == "eligible-active":
                 indexer_with_ens["is_eligible"] = True
@@ -1508,7 +1546,7 @@ def renderIndexerTable(json_file: str = 'active_indexers.json') -> List[dict]:
                 # All ineligible statuses (ineligible-expired, ineligible-unqualified)
                 indexer_with_ens["is_eligible"] = False
                 ineligible_count += 1
-            
+
             all_indexers.append(indexer_with_ens)
         
         print(f"✓ Loaded {len(all_indexers)} indexers from {json_file}")
@@ -2215,7 +2253,48 @@ def generate_html_dashboard(
         .filter-btn.reset:hover {{
             background: rgba(156, 163, 175, 0.3);
         }}
-        
+
+        .sort-wrapper {{
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }}
+
+        .sort-label {{
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--lunar-gray);
+            margin-right: 10px;
+        }}
+
+        .sort-btn {{
+            padding: 8px 16px;
+            border: 1px solid rgba(156, 163, 175, 0.2);
+            border-radius: 6px;
+            background: rgba(248, 246, 255, 0.95);
+            color: #9CA3AF;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }}
+
+        .sort-btn:hover {{
+            background: rgba(248, 246, 255, 1);
+        }}
+
+        .sort-btn.active {{
+            background: rgba(156, 163, 175, 0.9);
+            color: white;
+            border-color: rgba(156, 163, 175, 0.4);
+        }}
+
+        .streak-days {{
+            text-align: center;
+            font-weight: 600;
+        }}
+
         .table-container {{
             padding: 0 30px 30px;
             overflow-x: auto;
@@ -2670,6 +2749,11 @@ def generate_html_dashboard(
                 <button class="filter-btn ineligible" onclick="filterByStatus('ineligible')" data-tooltip="Expired (previously eligible) or Unqualified (never eligible)">Ineligible</button>
                 <button class="filter-btn reset" onclick="resetFilter()" data-tooltip="Show All">Reset</button>
             </div>
+            <div class="sort-wrapper">
+                <span class="sort-label">Sort by:</span>
+                <button class="sort-btn active" id="sortDefaultBtn" onclick="setSortMode('default')" data-tooltip="Sort by status priority, then ENS name">Status Priority</button>
+                <button class="sort-btn" id="sortStreakBtn" onclick="setSortMode('streak')" data-tooltip="Sort by continuous eligibility streak days (longest streaks first)">Streak Days</button>
+            </div>
         </div>
         
         <div class="table-container">
@@ -2679,22 +2763,34 @@ def generate_html_dashboard(
                         <th class="sortable" data-column="0">Indexer Address</th>
                         <th class="sortable" data-column="1">ENS Name</th>
                         <th class="sortable" data-column="2">Status</th>
-                        <th class="sortable" data-column="3">Last Renewed</th>
-                        <th class="sortable" data-column="4">Eligible Until</th>
+                        <th class="sortable" data-column="3">Streak Days</th>
+                        <th class="sortable" data-column="4">Last Renewed</th>
+                        <th class="sortable" data-column="5">Eligible Until</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
 """
 
     # Sort indexers: first by status (eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified), then by ENS name
-    def sort_key(indexer):
-        status = indexer.get("status", "ineligible-unqualified")
-        ens_name = indexer.get("ens_name", "")
-        # Status order: eligible-active (0), eligible-grace (1), ineligible-expired (2), ineligible-unqualified (3), then by ENS (empty ENS last)
-        status_priority = {"eligible-active": 0, "eligible-grace": 1, "ineligible-expired": 2, "ineligible-unqualified": 3}
-        return (status_priority.get(status, 4), ens_name.lower() if ens_name else "zzzzzzzzz")
-    
-    all_indexers_sorted = sorted(all_indexers, key=sort_key)
+    # Status priority mapping for default sorting
+    status_priority = {"eligible-active": 0, "eligible-grace": 1, "ineligible-expired": 2, "ineligible-unqualified": 3}
+
+    def sort_key(indexer, sort_mode="default"):
+        """Generate sort key for indexer based on sort mode."""
+        if sort_mode == "streak":
+            # Streak mode: sort by streak days (descending), then status priority, then ENS name
+            streak_days = indexer.get("continuous_streak_days", 0)
+            status = indexer.get("status", "ineligible-unqualified")
+            ens_name = indexer.get("ens_name", "")
+            return (-streak_days, status_priority.get(status, 4), ens_name.lower() if ens_name else "zzzzzzzzz")
+        else:
+            # Default mode: sort by status priority, then ENS name
+            status = indexer.get("status", "ineligible-unqualified")
+            ens_name = indexer.get("ens_name", "")
+            return (status_priority.get(status, 4), ens_name.lower() if ens_name else "zzzzzzzzz")
+
+    # Default sorting by status priority
+    all_indexers_sorted = sorted(all_indexers, key=lambda x: sort_key(x, sort_mode="default"))
 
     # Add table rows from sorted indexers
     for i, indexer in enumerate(all_indexers_sorted, 1):
@@ -2742,6 +2838,7 @@ def generate_html_dashboard(
                         <td><a href="{explorer_url}" target="_blank" class="address-link"><span class="address">{address}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a></td>
                         <td><span class="{ens_class}">{ens_display}</span></td>
                         <td>{status_badge}</td>
+                        <td class="streak-days">{indexer.get("continuous_streak_days", 0)}</td>
                         <td>{last_renewed_cell}</td>
                         <td>{eligible_until_cell}</td>
                     </tr>
@@ -3033,8 +3130,11 @@ def generate_html_dashboard(
             status_badge = '<span class="legend-badge ineligible">Expired</span>'
         else:  # ineligible-unqualified
             status_badge = '<span class="legend-badge ineligible">Unqualified</span>'
-        
-        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_short}", "{eligibility_renewal_time_readable}", "{eligible_until_short}", "{eligible_until_readable}", "{status}", "{last_renewed_on_tx}"],
+
+        # Get continuous streak days
+        streak_days = indexer.get("continuous_streak_days", 0)
+
+        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_short}", "{eligibility_renewal_time_readable}", "{eligible_until_short}", "{eligible_until_readable}", "{status}", "{last_renewed_on_tx}", {streak_days}],
 """
 
     html_content += """        ];
@@ -3043,6 +3143,7 @@ def generate_html_dashboard(
         let sortColumn = -1;
         let sortDirection = 'asc';
         let activeFilter = null;
+        let currentSortMode = localStorage.getItem('sortMode') || 'default';
         
         // Search functionality
         const searchInput = document.getElementById('searchInput');
@@ -3095,10 +3196,10 @@ def generate_html_dashboard(
                 // Add active class to clicked button
                 document.querySelector(`.filter-btn.${status}`).classList.add('active');
             }
-            
+
             applyFilters();
         }
-        
+
         // Reset filter
         function resetFilter() {
             activeFilter = null;
@@ -3107,7 +3208,82 @@ def generate_html_dashboard(
             document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             applyFilters();
         }
-        
+
+        // Set sort mode (default or streak)
+        function setSortMode(mode) {
+            currentSortMode = mode;
+            localStorage.setItem('sortMode', mode);
+
+            // Update button states
+            document.getElementById('sortDefaultBtn').classList.remove('active');
+            document.getElementById('sortStreakBtn').classList.remove('active');
+            if (mode === 'default') {
+                document.getElementById('sortDefaultBtn').classList.add('active');
+            } else {
+                document.getElementById('sortStreakBtn').classList.add('active');
+            }
+
+            // Re-render table with new sort mode
+            applySortMode();
+        }
+
+        // Apply sort mode to current data
+        function applySortMode() {
+            const statusPriority = {
+                'eligible-active': 0,
+                'eligible-grace': 1,
+                'ineligible-expired': 2,
+                'ineligible-unqualified': 3
+            };
+
+            if (currentSortMode === 'streak') {
+                // Sort by streak days (descending), then status priority, then ENS name
+                currentData.sort((a, b) => {
+                    // Streak is at index 7
+                    const aStreak = a[7] ?? 0;
+                    const bStreak = b[7] ?? 0;
+
+                    // First sort by streak (descending)
+                    if (aStreak !== bStreak) return bStreak - aStreak;
+
+                    // If same streak, sort by status priority
+                    const aStatus = a[7] ?? 'ineligible-unqualified';
+                    const bStatus = b[7] ?? 'ineligible-unqualified';
+                    const aPriority = statusPriority[aStatus] ?? 4;
+                    const bPriority = statusPriority[bStatus] ?? 4;
+
+                    if (aPriority !== bPriority) return aPriority - bPriority;
+
+                    // If same status, sort by ENS name
+                    const aENS = (a[1] || 'zzzzzzzzz').toLowerCase();
+                    const bENS = (b[1] || 'zzzzzzzzz').toLowerCase();
+                    return aENS.localeCompare(bENS);
+                });
+            } else {
+                // Default mode: sort by status priority, then ENS name
+                currentData.sort((a, b) => {
+                    const aStatusPriority = getStatusPriority(a[7]);
+                    const bStatusPriority = getStatusPriority(b[7]);
+
+                    if (aStatusPriority !== bStatusPriority) return aStatusPriority - bStatusPriority;
+
+                    // Within same status group, sort by selected column
+                    let aVal = a[sortColumn];
+                    let bVal = b[sortColumn];
+
+                    // All columns are now text, so convert to lowercase for comparison
+                    aVal = aVal?.toLowerCase() ?? '';
+                    bVal = bVal?.toLowerCase() ?? '';
+
+                    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            renderTable();
+        }
+
         // Sorting functionality
         function sortTable(column) {
             if (sortColumn === column) {
@@ -3235,6 +3411,7 @@ def generate_html_dashboard(
                         <td><a href="${explorerUrl}" target="_blank" class="address-link"><span class="address">${address}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a></td>
                         <td><span class="${ensClass}">${ensDisplay}</span></td>
                         <td>${status}</td>
+                        <td class="streak-days">${streakDays ?? 0}</td>
                         <td>${lastRenewedCell}</td>
                         <td>${eligibleUntilCell}</td>
                     </tr>
