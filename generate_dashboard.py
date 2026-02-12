@@ -3167,7 +3167,6 @@ def generate_html_dashboard(
                 return aENS.localeCompare(bENS);
             });
         }
-        }  // Close the if (currentSortMode === 'streak') block
 
         // Search functionality
         const searchInput = document.getElementById('searchInput');
