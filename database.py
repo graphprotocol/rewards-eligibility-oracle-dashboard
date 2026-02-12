@@ -135,7 +135,8 @@ def save_indexers(indexers: List[Dict], network_id: str = 'testnet') -> int:
     now = int(datetime.now().timestamp())
 
     for indexer in indexers:
-        address = indexer.get('id', '').lower()
+        # Support both 'id' and 'address' field names for compatibility
+        address = indexer.get('address', indexer.get('id', '')).lower()
         ens_name = indexer.get('ens_name')
 
         # Check if indexer exists (considering network_id)
@@ -151,10 +152,12 @@ def save_indexers(indexers: List[Dict], network_id: str = 'testnet') -> int:
             """, (ens_name, indexer.get('staked_tokens'), now, address, network_id))
         else:
             # Insert new indexer
+            # Use actual status if available, otherwise default to 'unknown'
+            status = indexer.get('status', 'unknown')
             cursor.execute("""
                 INSERT INTO indexers (address, ens_name, staked_tokens, last_check_time, status, network_id)
-                VALUES (?, ?, ?, ?, 'unknown', ?)
-            """, (address, ens_name, indexer.get('staked_tokens'), now, network_id))
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (address, ens_name, indexer.get('staked_tokens'), now, status, network_id))
         count += 1
 
     conn.commit()
