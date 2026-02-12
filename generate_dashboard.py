@@ -2751,8 +2751,8 @@ def generate_html_dashboard(
             </div>
             <div class="sort-wrapper">
                 <span class="sort-label">Sort by:</span>
-                <button class="sort-btn active" id="sortDefaultBtn" onclick="setSortMode('default')" data-tooltip="Sort by status priority, then ENS name">Status Priority</button>
-                <button class="sort-btn" id="sortStreakBtn" onclick="setSortMode('streak')" data-tooltip="Sort by continuous eligibility streak days (longest streaks first)">Streak Days</button>
+                <button class="sort-btn active" id="sortDefaultBtn" data-tooltip="Sort by status priority, then ENS name">Status Priority</button>
+                <button class="sort-btn" id="sortStreakBtn" data-tooltip="Sort by continuous eligibility streak days (longest streaks first)">Streak Days</button>
             </div>
         </div>
         
@@ -3233,6 +3233,12 @@ def generate_html_dashboard(
             applyFilters();
         }
 
+        // Add event listeners for filter buttons
+        document.getElementById('filter-eligible').addEventListener('click', () => filterByStatus('eligible'));
+        document.getElementById('filter-grace').addEventListener('click', () => filterByStatus('grace'));
+        document.getElementById('filter-ineligible').addEventListener('click', () => filterByStatus('ineligible'));
+        document.getElementById('filter-reset').addEventListener('click', () => resetFilter());
+
         // Set sort mode (default or streak)
         function setSortMode(mode) {
             currentSortMode = mode;
@@ -3250,6 +3256,10 @@ def generate_html_dashboard(
             // Re-render table with new sort mode
             applySortMode();
         }
+
+        // Add event listeners for sort buttons
+        document.getElementById('sortDefaultBtn').addEventListener('click', () => setSortMode('default'));
+        document.getElementById('sortStreakBtn').addEventListener('click', () => setSortMode('streak'));
 
         // Apply sort mode to current data
         function applySortMode() {
