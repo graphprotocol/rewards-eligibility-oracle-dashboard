@@ -1244,6 +1244,12 @@ def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC]
         print(f"  - Renewal times retrieved: {updated_count}")
         print(f"  - Status breakdown: {eligible_status_count} eligible, {grace_status_count} grace, {ineligible_status_count} ineligible")
         print(f"✓ Results written to {input_file}")
+
+        # Save current indexer states to database for streak calculation
+        print("✓ Saving indexer states to database...")
+        saved_count = save_indexers(indexers, network_id=network_id)
+        print(f"  - Saved {saved_count} indexers to database")
+
         return True
         
     except Exception as e:
@@ -2529,6 +2535,42 @@ def generate_html_dashboard(
             text-decoration: underline;
         }}
 
+        .status-legend {{
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 20px 0;
+            max-width: 1140px;
+            margin-left: auto;
+            margin-right: auto;
+        }}
+
+        .status-legend h3 {{
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            color: var(--text-primary);
+        }}
+
+        .legend-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 12px;
+        }}
+
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+        }}
+
+        .legend-item .legend-description {{
+            color: var(--lunar-gray);
+            font-size: 14px;
+            line-height: 1.5;
+        }}
+
         .footer {{
             padding: 20px 30px;
             background: rgba(248, 246, 255, 0.8);
@@ -2755,7 +2797,29 @@ def generate_html_dashboard(
                 <button class="sort-btn" id="sortStreakBtn" data-tooltip="Sort by continuous eligibility streak days (longest streaks first)">Streak Days</button>
             </div>
         </div>
-        
+
+        <div class="status-legend">
+            <h3>Status Legend</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <span class="legend-badge good">Active</span>
+                    <span class="legend-description">Currently eligible for rewards (renewed recently)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-badge grace">Grace</span>
+                    <span class="legend-description">Still eligible but needs to renew soon to stay compliant</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-badge ineligible">Expired</span>
+                    <span class="legend-description">Previously eligible but lost eligibility (renewal time passed)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-badge ineligible">Unqualified</span>
+                    <span class="legend-description">Never been eligible (renewal time not set or invalid)</span>
+                </div>
+            </div>
+        </div>
+
         <div class="table-container">
             <table id="indexersTable">
                 <thead>
