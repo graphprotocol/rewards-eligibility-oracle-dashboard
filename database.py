@@ -231,7 +231,7 @@ def update_eligibility(address: str, is_eligible: bool, renewal_time: int, statu
 
     if row:
         old_status = row['status']
-        if old_status != status:
+        if old_status is not None and old_status != status:
             # Status is changing, update the last_status_change_date
             cursor.execute("""
                 UPDATE indexers
