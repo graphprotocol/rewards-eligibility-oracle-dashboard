@@ -3144,7 +3144,30 @@ def generate_html_dashboard(
         let sortDirection = 'asc';
         let activeFilter = null;
         let currentSortMode = localStorage.getItem('sortMode') || 'default';
-        
+
+        // Apply saved sort mode on page load
+        if (currentSortMode === 'streak') {
+            currentData.sort((a, b) => {
+                const statusPriority = {
+                    'eligible-active': 0,
+                    'eligible-grace': 1,
+                    'ineligible-expired': 2,
+                    'ineligible-unqualified': 3
+                };
+                const aStreak = a[9] ?? 0;
+                const bStreak = b[9] ?? 0;
+                if (aStreak !== bStreak) return bStreak - aStreak;
+                const aStatus = a[7] ?? 'ineligible-unqualified';
+                const bStatus = b[7] ?? 'ineligible-unqualified';
+                const aPriority = statusPriority[aStatus] ?? 4;
+                const bPriority = statusPriority[bStatus] ?? 4;
+                if (aPriority !== bPriority) return aPriority - bPriority;
+                const aENS = (a[1] || 'zzzzzzzzz').toLowerCase();
+                const bENS = (b[1] || 'zzzzzzzzz').toLowerCase();
+                return aENS.localeCompare(bENS);
+            });
+        }
+
         // Search functionality
         const searchInput = document.getElementById('searchInput');
         const tableBody = document.getElementById('tableBody');
