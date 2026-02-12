@@ -3097,7 +3097,7 @@ def generate_html_dashboard(
         }});
 
         // Table data
-        const originalData = [
+        let originalData = [
 """
 
     # Sort indexers: first by status (eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified), then by ENS name
@@ -3285,8 +3285,10 @@ def generate_html_dashboard(
             } else {
                 // Default mode: sort by status priority, then ENS name
                 currentData.sort((a, b) => {
-                    const aStatusPriority = getStatusPriority(a[7]);
-                    const bStatusPriority = getStatusPriority(b[7]);
+                    const aStatus = a[7] ?? 'ineligible-unqualified';
+                    const bStatus = b[7] ?? 'ineligible-unqualified';
+                    const aStatusPriority = statusPriority[aStatus] ?? 4;
+                    const bStatusPriority = statusPriority[bStatus] ?? 4;
 
                     if (aStatusPriority !== bStatusPriority) return aStatusPriority - bStatusPriority;
 
