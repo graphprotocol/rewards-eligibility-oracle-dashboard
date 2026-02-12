@@ -2734,7 +2734,7 @@ def generate_html_dashboard(
             </div>
             <div class="filter-wrapper">
                 <span class="filter-label">Filter by Status:</span>
-                <button class="filter-btn eligible" onclick="filterByStatus('eligible')" data-tooltip="Fully compliant indexers">Eligible - Active</button>"""
+                <button class="filter-btn eligible" id="filterEligibleBtn" data-tooltip="Fully compliant indexers">Eligible - Active</button>"""
     
     # Add grace period tooltip if eligibility_period is available
     grace_tooltip = ""
@@ -2745,14 +2745,14 @@ def generate_html_dashboard(
         grace_tooltip = ' data-tooltip="Still eligible but need to renew soon"'
     
     html_content += f"""
-                <button class="filter-btn grace" onclick="filterByStatus('grace')"{grace_tooltip}>Eligible - Grace</button>
-                <button class="filter-btn ineligible" onclick="filterByStatus('ineligible')" data-tooltip="Expired (previously eligible) or Unqualified (never eligible)">Ineligible</button>
-                <button class="filter-btn reset" onclick="resetFilter()" data-tooltip="Show All">Reset</button>
+                <button class="filter-btn grace" id="filterGraceBtn"{grace_tooltip}>Eligible - Grace</button>
+                <button class="filter-btn ineligible" id="filterIneligibleBtn" data-tooltip="Expired (previously eligible) or Unqualified (never eligible)">Ineligible</button>
+                <button class="filter-btn reset" id="resetFilterBtn" data-tooltip="Show All">Reset</button>
             </div>
             <div class="sort-wrapper">
                 <span class="sort-label">Sort by:</span>
-                <button class="sort-btn active" id="sortDefaultBtn" onclick="setSortMode('default')" data-tooltip="Sort by status priority, then ENS name">Status Priority</button>
-                <button class="sort-btn" id="sortStreakBtn" onclick="setSortMode('streak')" data-tooltip="Sort by continuous eligibility streak days (longest streaks first)">Streak Days</button>
+                <button class="sort-btn active" id="sortDefaultBtn" data-tooltip="Sort by status priority, then ENS name">Status Priority</button>
+                <button class="sort-btn" id="sortStreakBtn" data-tooltip="Sort by continuous eligibility streak days (longest streaks first)">Streak Days</button>
             </div>
         </div>
         
@@ -3463,7 +3463,17 @@ def generate_html_dashboard(
         document.querySelectorAll('th.sortable').forEach((header, index) => {
             header.addEventListener('click', () => sortTable(index));
         });
-        
+
+        // Add event listeners for sort buttons
+        document.getElementById('sortDefaultBtn').addEventListener('click', () => setSortMode('default'));
+        document.getElementById('sortStreakBtn').addEventListener('click', () => setSortMode('streak'));
+
+        // Add event listeners for filter buttons
+        document.getElementById('filterEligibleBtn').addEventListener('click', () => filterByStatus('eligible'));
+        document.getElementById('filterGraceBtn').addEventListener('click', () => filterByStatus('grace'));
+        document.getElementById('filterIneligibleBtn').addEventListener('click', () => filterByStatus('ineligible'));
+        document.getElementById('resetFilterBtn').addEventListener('click', resetFilter);
+
         // Initialize
         renderTable();
         updateStats();
