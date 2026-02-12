@@ -3248,6 +3248,7 @@ def generate_html_dashboard(
 
             // Re-render table with new sort mode
             applySortMode();
+            renderTable();
         }
 
         // Apply sort mode to current data
