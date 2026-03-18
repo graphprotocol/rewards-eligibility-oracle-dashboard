@@ -2724,7 +2724,7 @@ def generate_html_dashboard(
                     <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; font-size: 13px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="color: var(--lunar-gray); font-weight: 500;">Eligibility Criteria:</span>
-                            <span><a href="https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">TBD (see GIP-0079)</a></span>
+                            <span><a href="https://github.com/graphprotocol/rewards-eligibility-oracle/blob/main/ELIGIBILITY_CRITERIA.md#eligibility-criteria" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">Eligibility Criteria</a></span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="color: var(--lunar-gray); font-weight: 500;">Data Source:</span>

@@ -31,10 +31,10 @@ open index.html
 
 ## Environments
 
-| Environment | Contract Address | Deployment Block |
-|-------------|-----------------|------------------|
-| **testnet** (Current) | `0x62c23057...9a99` | 237961353 |
-| **testnet_old** (Previous) | `0x4eb1de98...b924` | 237989268 |
+| Environment | Contract Address | Network |
+|-------------|-----------------|---------|
+| **mainnet** | `0x8ec2767a...f304` | Arbitrum One (42161) |
+| **testnet** | `0x62c23057...9a99` | Arbitrum Sepolia (421614) |
 
 ## Data Sources
 
