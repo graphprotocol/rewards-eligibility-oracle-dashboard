@@ -8,7 +8,7 @@ This is a **Python-based static dashboard** for monitoring The Graph Protocol's 
 
 **Key Architecture**: Pure Python script (no web framework) → generates static `index.html` → deployed to static hosting via Docker Compose with scheduler that regenerates every 5 minutes.
 
-**Production URL**: https://hub.thegraph.org/reo/
+**Production URL**: https://hub.thegraph.foundation/reo/
 
 ## CRITICAL: Deployment Warnings
 

@@ -140,7 +140,7 @@ class TestEnvironmentConfiguration(unittest.TestCase):
         required_fields = [
             "name",
             "network_id",
-            "rpc_endpoints",
+            "rpc_manager",
             "contract_address"
         ]
 
