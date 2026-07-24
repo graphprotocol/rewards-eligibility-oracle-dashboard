@@ -107,23 +107,23 @@ def parse_deployment_block_from_registry(registry: dict, network_id: str) -> Opt
     return None
 
 
-def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> dict:
+def get_environments_config() -> dict:
     """
-    Build the ENVIRONMENTS config dict with dynamic contract addresses and RPC endpoints.
+    Build the ENVIRONMENTS config dict with dynamic contract addresses and
+    per-network RPC managers.
 
-    Production configuration with two environments: mainnet and testnet.
+    Each environment gets its own RoundRobinRPC instance so that mainnet
+    (Arbitrum One) and testnet (Arbitrum Sepolia) use separate RPC endpoints.
 
-    Args:
-        rpc_manager: Optional RoundRobinRPC instance to get RPC endpoints from
+    RPC endpoint resolution per environment:
+        1. RPC_ENDPOINT_MAINNET / RPC_ENDPOINT_TESTNET (network-specific)
+        2. Falls back to generic RPC_ENDPOINT if no network-specific endpoint is set
 
     Returns:
-        dict: ENVIRONMENTS configuration
+        dict: ENVIRONMENTS configuration with per-environment rpc_manager
     """
     # Fetch from GitHub JSON
     addresses = fetch_contract_addresses()
-
-    # Get RPC endpoints from manager if available
-    rpc_endpoints = rpc_manager.get_all() if rpc_manager else []
 
     # Get Sepolia address from JSON registry
     sepolia_address = parse_contract_address_from_registry(addresses, "421614")
@@ -154,7 +154,7 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
         "mainnet": {
             "name": "Arbitrum One",
             "network_id": 42161,
-            "rpc_endpoints": rpc_endpoints,
+            "rpc_manager": RoundRobinRPC(network="mainnet"),
             "contract_address": mainnet_address,
             "deployment_block": parse_deployment_block_from_registry(addresses, "42161"),
             "explorer_url": "https://arbiscan.io",
@@ -162,7 +162,7 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
         "testnet": {
             "name": "Arbitrum Sepolia",
             "network_id": 421614,
-            "rpc_endpoints": rpc_endpoints,
+            "rpc_manager": RoundRobinRPC(network="testnet"),
             "contract_address": testnet_address,
             "deployment_block": sepolia_deployment_block,
             "explorer_url": "https://sepolia.arbiscan.io",
@@ -174,7 +174,7 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
         environments["testnet_new"] = {
             "name": "Arbitrum Sepolia (New Deployment)",
             "network_id": 421614,
-            "rpc_endpoints": rpc_endpoints,
+            "rpc_manager": RoundRobinRPC(network="testnet"),
             "contract_address": testnet_new_address,
             "deployment_block": testnet_new_deployment_block,
             "explorer_url": "https://sepolia.arbiscan.io",
@@ -198,7 +198,7 @@ def get_environments_config(rpc_manager: Optional['RoundRobinRPC'] = None) -> di
         environments["testnet_old"] = {
             "name": "Arbitrum Sepolia (Previous Implementation)",
             "network_id": 421614,
-            "rpc_endpoints": rpc_endpoints,
+            "rpc_manager": RoundRobinRPC(network="testnet"),
             "contract_address": testnet_old_address,
             "deployment_block": testnet_old_deployment_block,
             "explorer_url": "https://sepolia.arbiscan.io",
@@ -279,37 +279,61 @@ class RoundRobinRPC:
     Round-robin RPC endpoint manager.
     Cycles through multiple RPC endpoints for load balancing and failover.
     """
-    def __init__(self):
+    def __init__(self, network=None):
         self.endpoints = []
         self.current_index = 0
+        self.network = network
         self.lock = threading.Lock()
         self._load_endpoints()
-    
+
     def _load_endpoints(self):
-        """Load RPC endpoints from environment variables."""
-        # Try RPC_ENDPOINT first (backward compatibility)
-        rpc_endpoint = os.getenv("RPC_ENDPOINT")
-        if rpc_endpoint:
-            self.endpoints.append(rpc_endpoint)
-        
-        # Try RPC_ENDPOINT_1, RPC_ENDPOINT_2, etc.
-        i = 1
-        while True:
-            endpoint = os.getenv(f"RPC_ENDPOINT_{i}")
-            if endpoint:
-                self.endpoints.append(endpoint)
-                i += 1
-            else:
-                break
-        
+        """Load RPC endpoints from environment variables.
+
+        If a network is specified (e.g. 'mainnet', 'testnet'), loads from
+        RPC_ENDPOINT_MAINNET, RPC_ENDPOINT_MAINNET_2, etc. first.
+        Falls back to generic RPC_ENDPOINT only if no network-specific
+        endpoints are found (backward compatibility).
+        """
+        if self.network:
+            network_key = self.network.upper()
+            # Try RPC_ENDPOINT_{NETWORK} (primary)
+            primary = os.getenv(f"RPC_ENDPOINT_{network_key}")
+            if primary:
+                self.endpoints.append(primary)
+            # Try RPC_ENDPOINT_{NETWORK}_2, _3, etc.
+            i = 2
+            while True:
+                endpoint = os.getenv(f"RPC_ENDPOINT_{network_key}_{i}")
+                if endpoint:
+                    self.endpoints.append(endpoint)
+                    i += 1
+                else:
+                    break
+
+        # Fall back to generic endpoints if no network-specific ones found
+        if not self.endpoints:
+            rpc_endpoint = os.getenv("RPC_ENDPOINT")
+            if rpc_endpoint:
+                self.endpoints.append(rpc_endpoint)
+            # Try RPC_ENDPOINT_1, RPC_ENDPOINT_2, etc.
+            i = 1
+            while True:
+                endpoint = os.getenv(f"RPC_ENDPOINT_{i}")
+                if endpoint:
+                    self.endpoints.append(endpoint)
+                    i += 1
+                else:
+                    break
+
         # Remove duplicates while preserving order
         seen = set()
         self.endpoints = [x for x in self.endpoints if not (x in seen or seen.add(x))]
-        
+
+        network_label = f" ({self.network})" if self.network else ""
         if not self.endpoints:
-            print("⚠ Warning: No RPC endpoints found in environment variables")
+            print(f"⚠ Warning: No RPC endpoints found{network_label}")
         else:
-            print(f"✓ Loaded {len(self.endpoints)} RPC endpoint(s) for round-robin")
+            print(f"✓ Loaded {len(self.endpoints)} RPC endpoint(s){network_label}")
             for i, endpoint in enumerate(self.endpoints, 1):
                 # Mask API keys in display using the same logic as _mask_endpoint
                 display_endpoint = self._mask_endpoint(endpoint)
@@ -2724,7 +2748,7 @@ def generate_html_dashboard(
                     <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; font-size: 13px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="color: var(--lunar-gray); font-weight: 500;">Eligibility Criteria:</span>
-                            <span><a href="https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">TBD (see GIP-0079)</a></span>
+                            <span><a href="https://github.com/graphprotocol/rewards-eligibility-oracle/blob/main/ELIGIBILITY_CRITERIA.md#eligibility-criteria" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">Eligibility Criteria</a></span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="color: var(--lunar-gray); font-weight: 500;">Data Source:</span>
@@ -3715,21 +3739,12 @@ def main():
     # Fallback contract address (if JSON fetch fails)
     fallback_contract_address = os.getenv("CONTRACT_ADDRESS")
 
-    # Initialize round-robin RPC manager
-    rpc_manager = get_rpc_manager()
-
-    # Validate RPC endpoints
-    if not rpc_manager.endpoints:
-        print("❌ Error: No RPC endpoints configured")
-        print("Please set RPC_ENDPOINT or RPC_ENDPOINT_1, RPC_ENDPOINT_2, etc. in your .env file")
-        return
-
     print("✓ Configuration loaded successfully")
     print()
 
-    # Initialize ENVIRONMENTS with RPC manager
+    # Initialize ENVIRONMENTS with per-network RPC managers
     global ENVIRONMENTS
-    ENVIRONMENTS = get_environments_config(rpc_manager)
+    ENVIRONMENTS = get_environments_config()
 
     # Validate we have at least one environment with a contract address
     valid_environments = {k: v for k, v in ENVIRONMENTS.items() if v.get('contract_address')}
@@ -3742,6 +3757,19 @@ def main():
         else:
             print("❌ Error: No contract addresses available and no CONTRACT_ADDRESS fallback")
             return
+
+    # Validate that each environment has RPC endpoints
+    for env_key, env_config in list(valid_environments.items()):
+        env_rpc = env_config.get('rpc_manager')
+        if not env_rpc or not env_rpc.endpoints:
+            print(f"⚠ Warning: No RPC endpoints for {env_key}, skipping")
+            print(f"  Set RPC_ENDPOINT_{env_key.upper()} or RPC_ENDPOINT in your .env file")
+            del valid_environments[env_key]
+
+    if not valid_environments:
+        print("❌ Error: No environments have RPC endpoints configured")
+        print("Please set RPC_ENDPOINT_MAINNET and/or RPC_ENDPOINT_TESTNET in your .env file")
+        return
 
     print(f"✓ Processing {len(valid_environments)} environment(s): {', '.join(valid_environments.keys())}")
     print()
@@ -3756,6 +3784,8 @@ def main():
 
     # Process each environment
     for env_key, env_config in valid_environments.items():
+        env_rpc_manager = env_config['rpc_manager']
+
         print("=" * 70)
         print(f"Processing {env_config['name']} (Network ID: {env_config['network_id']})")
         print(f"Contract: {env_config['contract_address']}")
@@ -3781,7 +3811,7 @@ def main():
 
         # Get deployment timestamp if deployment block is known
         if env_config.get('deployment_block'):
-            deployment_time = get_block_timestamp(rpc_manager, env_config['deployment_block'])
+            deployment_time = get_block_timestamp(env_rpc_manager, env_config['deployment_block'])
             environment_data[env_key]["contract_info"]["deployment_time"] = deployment_time
             if deployment_time:
                 print(f"✓ Contract deployment time: {deployment_time}")
@@ -3807,7 +3837,7 @@ def main():
                 output_file=output_file,
                 use_cached_ens=use_cached_ens,
                 contract_address=env_config['contract_address'],
-                rpc_manager=rpc_manager,
+                rpc_manager=env_rpc_manager,
                 transaction_hash=transaction_hash,
                 network_id=env_key
             )
@@ -3830,7 +3860,7 @@ def main():
         if env_config['contract_address']:
             checkEligibility(
                 env_config['contract_address'],
-                rpc_manager=rpc_manager,
+                rpc_manager=env_rpc_manager,
                 input_file=output_file,
                 grace_buffer_hours=grace_buffer_hours,
                 network_id=env_key
@@ -3890,21 +3920,23 @@ def main():
     print("=" * 70)
     print()
 
-    # Use the first available environment's contract address for backward compatibility
+    # Use the first available environment's contract address and RPC manager
     first_env = list(environment_data.keys())[0] if environment_data else 'testnet'
     if first_env in environment_data:
         env_data = environment_data[first_env]
         contract_address = env_data['contract_info']['address']
+        first_env_rpc = valid_environments[first_env]['rpc_manager'] if first_env in valid_environments else None
         print(f"Using {first_env} contract address: {contract_address}")
     else:
         # Fallback to environment variable
         contract_address = os.getenv("CONTRACT_ADDRESS", "")
+        first_env_rpc = None
 
     html_content = generate_html_dashboard(
         [],  # Empty list - function reads from file
         contract_address=contract_address,
         api_key=api_key,
-        rpc_manager=rpc_manager,
+        rpc_manager=first_env_rpc,
         environment_data=environment_data
     )
 

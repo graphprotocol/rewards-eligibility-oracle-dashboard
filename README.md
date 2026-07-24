@@ -2,7 +2,7 @@
 
 The **Rewards Eligibility Oracle (REO)** dashboard monitors indexer eligibility for rewards based on service quality metrics in [The Graph Protocol](https://thegraph.com).
 
-**Live Dashboard**: https://hub.thegraph.org/reo/
+**Live Dashboard**: https://hub.thegraph.foundation/reo/
 
 ## What It Does
 
@@ -31,10 +31,10 @@ open index.html
 
 ## Environments
 
-| Environment | Contract Address | Deployment Block |
-|-------------|-----------------|------------------|
-| **testnet** (Current) | `0x62c23057...9a99` | 237961353 |
-| **testnet_old** (Previous) | `0x4eb1de98...b924` | 237989268 |
+| Environment | Contract Address | Network |
+|-------------|-----------------|---------|
+| **mainnet** | `0x8ec2767a9d9ba02b4e09e8ff4fac2e14a340f304` | Arbitrum One (42161) |
+| **testnet** | `0x62c2305739cc75f19a3a6d52387ceb3690d99a99` | Arbitrum Sepolia (421614) |
 
 ## Data Sources
 
