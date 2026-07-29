@@ -60,6 +60,61 @@ def fetch_contract_addresses() -> dict:
         return {}
 
 
+def _find_reo_entry(network_data: dict) -> Optional[dict]:
+    """
+    Locate the Rewards Eligibility Oracle entry within a network's registry block.
+
+    The addresses.json registry is inconsistent across networks: testnet (421614)
+    exposes the oracle under "RewardsEligibilityOracle", while mainnet (42161)
+    uses "RewardsEligibilityOracleA". Prefer the canonical key, then fall back to
+    any key that starts with "RewardsEligibilityOracle".
+
+    Args:
+        network_data: The registry block for a single network (e.g. registry["42161"])
+
+    Returns:
+        The oracle entry dict, or None if not found.
+    """
+    if not isinstance(network_data, dict):
+        return None
+    if "RewardsEligibilityOracle" in network_data:
+        return network_data["RewardsEligibilityOracle"]
+    for key, value in network_data.items():
+        if key.startswith("RewardsEligibilityOracle"):
+            return value
+    return None
+
+
+def _environment_data_to_json(environment_data: Optional[dict]) -> str:
+    """
+    Serialize environment_data for embedding in the dashboard page.
+
+    Each environment's ``config`` carries a live ``RoundRobinRPC`` instance (see
+    get_environments_config), which is not JSON-serializable. Drop it — and any
+    other non-serializable config value — so the client-side ``environmentData``
+    object can be embedded without crashing HTML generation.
+
+    Returns:
+        A JSON string (``"{}"`` when there is no environment data).
+    """
+    if not environment_data:
+        return "{}"
+
+    safe: dict = {}
+    for env_key, env in environment_data.items():
+        env_copy = dict(env)
+        config = env_copy.get("config")
+        if isinstance(config, dict):
+            env_copy["config"] = {
+                k: v for k, v in config.items() if k != "rpc_manager"
+            }
+        safe[env_key] = env_copy
+
+    # default=str is a belt-and-suspenders guard against any future
+    # non-serializable value sneaking into the embedded data.
+    return json.dumps(safe, default=str)
+
+
 def parse_contract_address_from_registry(registry: dict, network_id: str) -> Optional[str]:
     """
     Parse contract address from registry for a specific network.
@@ -72,9 +127,9 @@ def parse_contract_address_from_registry(registry: dict, network_id: str) -> Opt
         Contract address or None if not found
     """
     if network_id in registry:
-        network_data = registry[network_id]
-        if "RewardsEligibilityOracle" in network_data:
-            return network_data["RewardsEligibilityOracle"].get("address")
+        reo = _find_reo_entry(registry[network_id])
+        if reo:
+            return reo.get("address")
 
     return None
 
@@ -91,9 +146,9 @@ def parse_deployment_block_from_registry(registry: dict, network_id: str) -> Opt
         Deployment block number or None if not found
     """
     if network_id in registry:
-        network_data = registry[network_id]
-        if "RewardsEligibilityOracle" in network_data:
-            proxy_deployment = network_data["RewardsEligibilityOracle"].get("proxyDeployment", {})
+        reo = _find_reo_entry(registry[network_id])
+        if reo:
+            proxy_deployment = reo.get("proxyDeployment", {})
             block_number = proxy_deployment.get("blockNumber")
             if block_number:
                 try:
@@ -129,11 +184,20 @@ def get_environments_config() -> dict:
     sepolia_address = parse_contract_address_from_registry(addresses, "421614")
     sepolia_deployment_block = parse_deployment_block_from_registry(addresses, "421614")
 
-    # Use JSON registry address if available, otherwise fallback
-    testnet_address = sepolia_address if sepolia_address else "0x62c2305739cc75f19a3a6d52387ceb3690d99a99"
+    # Resolve the testnet contract address. The Sepolia (421614) registry block
+    # holds several oracle variants (RewardsEligibilityOracleA/B/Mock) with no
+    # canonical "RewardsEligibilityOracle" key, so the registry auto-pick is
+    # ambiguous. TESTNET_CONTRACT_ADDRESS lets you pin an explicit address
+    # (e.g. the RewardsEligibilityOracleMock deployment) and takes precedence.
+    testnet_address = (
+        os.getenv("TESTNET_CONTRACT_ADDRESS")
+        or sepolia_address
+        or "0x62c2305739cc75f19a3a6d52387ceb3690d99a99"
+    )
 
-    # Get fallback mainnet address from .env (if GitHub doesn't have it)
-    mainnet_address = addresses.get("42161", {}).get("RewardsEligibilityOracle", {}).get("address", "")
+    # Get mainnet address from registry (handles the "RewardsEligibilityOracleA"
+    # key), falling back to .env if the registry doesn't have it.
+    mainnet_address = parse_contract_address_from_registry(addresses, "42161")
     if not mainnet_address:
         # Try to get from environment variable
         mainnet_address = os.getenv("MAINNET_CONTRACT_ADDRESS", "")
@@ -484,15 +548,17 @@ def save_transaction_to_json(transaction_data: dict, json_file: str = 'last_tran
         print(f"⚠ Failed to save transaction data")
 
 
-def get_last_transaction(contract_address: str, api_key: str) -> Optional[dict]:
+def get_last_transaction(contract_address: str, api_key: str, chainid: str = "421614") -> Optional[dict]:
     """
-    Get the last transaction for a contract from Arbiscan API (Sepolia).
-    Uses Etherscan API V2 endpoint with txlist action, descending sort, and limit 1 for efficiency.
-    
+    Get the last transaction for a contract from the Etherscan V2 API.
+    Uses txlist action, descending sort, and limit 1 for efficiency.
+
     Args:
         contract_address: The contract address to query
-        api_key: Arbiscan/Etherscan API key
-        
+        api_key: Arbiscan/Etherscan API key (Etherscan V2 keys are chain-agnostic)
+        chainid: Target chain ID as a string. Defaults to "421614" (Arbitrum
+            Sepolia); pass "42161" for Arbitrum One (mainnet).
+
     Returns:
         Dictionary with transaction data (keys: 'hash', 'blockNumber', 'timeStamp', 'from') or None if error
     """
@@ -504,7 +570,7 @@ def get_last_transaction(contract_address: str, api_key: str) -> Optional[dict]:
         "sort": "desc",  # Descending order (most recent first)
         "page": 1,
         "offset": 1,  # Only get the last transaction
-        "chainid": "421614",  # Arbitrum Sepolia chain ID
+        "chainid": chainid,
         "apikey": api_key
     }
         
@@ -1196,7 +1262,7 @@ def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC]
                 if transaction_hash:
                     indexer["last_renewed_on_tx"] = transaction_hash
                 eligible_status_count += 1
-            elif eligibility_renewal_time < grace_buffer_cutoff and eligibility_period and eligibility_renewal_time > 0:
+            elif grace_buffer_cutoff and eligibility_renewal_time < grace_buffer_cutoff and eligibility_period and eligibility_renewal_time > 0:
                 # Check if in grace period
                 grace_period_end = eligibility_renewal_time + eligibility_period
                 if current_time < grace_period_end:
@@ -1595,7 +1661,8 @@ def generate_html_dashboard(
     contract_address: str,
     api_key: Optional[str] = None,
     rpc_manager: Optional[RoundRobinRPC] = None,
-    environment_data: Optional[dict] = None
+    environment_data: Optional[dict] = None,
+    chainid: str = "421614"
 ) -> str:
     """
     Generate the HTML dashboard content with multi-environment support.
@@ -1606,6 +1673,8 @@ def generate_html_dashboard(
         api_key: Arbiscan API key
         rpc_manager: RPC manager for contract calls
         environment_data: Dict containing data for all environments
+        chainid: Chain ID (string) for the primary environment's last-transaction
+            lookup. Defaults to "421614" (Arbitrum Sepolia).
 
     Returns:
         Complete HTML content as string
@@ -1622,7 +1691,7 @@ def generate_html_dashboard(
     
     # Fetch via Arbiscan API
     if api_key:
-        last_transaction = get_last_transaction(contract_address, api_key)
+        last_transaction = get_last_transaction(contract_address, api_key, chainid=chainid)
     
     # Fallback: load from local JSON file (cached data)
     if not last_transaction:
@@ -2944,7 +3013,7 @@ def generate_html_dashboard(
 
     <script>
         // Multi-environment data
-        const environmentData = {json.dumps(environment_data) if environment_data else "{}"};
+        const environmentData = {_environment_data_to_json(environment_data)};
 
         // Current selected environment
         let currentEnvironment = 'testnet';
@@ -3828,7 +3897,10 @@ def main():
             transaction_hash = None
             if api_key and env_config['contract_address']:
                 # Try to get last transaction for this environment
-                last_transaction = get_last_transaction(env_config['contract_address'], api_key)
+                last_transaction = get_last_transaction(
+                    env_config['contract_address'], api_key,
+                    chainid=str(env_config['network_id'])
+                )
                 if last_transaction:
                     transaction_hash = last_transaction.get("hash")
 
@@ -3926,18 +3998,21 @@ def main():
         env_data = environment_data[first_env]
         contract_address = env_data['contract_info']['address']
         first_env_rpc = valid_environments[first_env]['rpc_manager'] if first_env in valid_environments else None
+        first_env_chainid = str(env_data['config']['network_id'])
         print(f"Using {first_env} contract address: {contract_address}")
     else:
         # Fallback to environment variable
         contract_address = os.getenv("CONTRACT_ADDRESS", "")
         first_env_rpc = None
+        first_env_chainid = "421614"
 
     html_content = generate_html_dashboard(
         [],  # Empty list - function reads from file
         contract_address=contract_address,
         api_key=api_key,
         rpc_manager=first_env_rpc,
-        environment_data=environment_data
+        environment_data=environment_data,
+        chainid=first_env_chainid
     )
 
     # Write to index.html (in output directory if in production environment)

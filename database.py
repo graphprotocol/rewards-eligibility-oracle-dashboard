@@ -35,6 +35,52 @@ def _migrate_network_id_column(cursor: sqlite3.Cursor):
         print("✓ database network_id column already exists")
 
 
+def _migrate_composite_primary_key(cursor: sqlite3.Cursor):
+    """
+    Rebuild the indexers table with a composite (address, network_id) primary key
+    if it still uses the legacy address-only primary key.
+
+    Required for multi-environment support: the same indexer address can appear in
+    more than one network (e.g. mainnet and testnet both track the same indexers),
+    which is impossible when address alone is the primary key.
+    """
+    cursor.execute("PRAGMA table_info(indexers)")
+    # Each row: (cid, name, type, notnull, dflt_value, pk). pk > 0 means the
+    # column is part of the primary key.
+    pk_columns = [col[1] for col in cursor.fetchall() if col[5]]
+
+    if pk_columns == ["address"]:
+        print("✓ Migrating database: composite primary key (address, network_id)")
+        cursor.execute("""
+            CREATE TABLE indexers_new (
+                address TEXT,
+                ens_name TEXT,
+                staked_tokens TEXT,
+                is_eligible INTEGER,
+                eligibility_renewal_time INTEGER,
+                status TEXT,
+                last_status_change_date INTEGER,
+                last_check_time INTEGER,
+                network_id TEXT DEFAULT 'testnet',
+                PRIMARY KEY (address, network_id)
+            )
+        """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO indexers_new
+                (address, ens_name, staked_tokens, is_eligible, eligibility_renewal_time,
+                 status, last_status_change_date, last_check_time, network_id)
+            SELECT address, ens_name, staked_tokens, is_eligible, eligibility_renewal_time,
+                 status, last_status_change_date, last_check_time,
+                 COALESCE(network_id, 'testnet')
+            FROM indexers
+        """)
+        cursor.execute("DROP TABLE indexers")
+        cursor.execute("ALTER TABLE indexers_new RENAME TO indexers")
+        print("✓ Migration complete: composite primary key applied")
+    else:
+        print("✓ database primary key already composite (address, network_id)")
+
+
 def get_connection() -> sqlite3.Connection:
     """Get a database connection with row factory enabled."""
     conn = sqlite3.connect(DB_PATH)
@@ -49,7 +95,7 @@ def init_db():
     # Indexers table - stores current state of all indexers
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS indexers (
-            address TEXT PRIMARY KEY,
+            address TEXT,
             ens_name TEXT,
             staked_tokens TEXT,
             is_eligible INTEGER,
@@ -57,12 +103,16 @@ def init_db():
             status TEXT,
             last_status_change_date INTEGER,
             last_check_time INTEGER,
-            network_id TEXT DEFAULT 'testnet'
+            network_id TEXT DEFAULT 'testnet',
+            PRIMARY KEY (address, network_id)
         )
     """)
 
     # Migrate existing data to add network_id column if missing
     _migrate_network_id_column(cursor)
+
+    # Migrate legacy address-only primary key to composite (address, network_id)
+    _migrate_composite_primary_key(cursor)
 
     # Status change log - tracks all status transitions
     cursor.execute("""
