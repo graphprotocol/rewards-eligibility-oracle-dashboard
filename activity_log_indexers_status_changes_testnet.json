@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "last_check": "2026-02-11 00:23:25 UTC",
-    "last_oracle_update_time": 1770717627
+    "last_check": "2026-07-24 17:36:38 UTC",
+    "last_oracle_update_time": 1784793762
   },
   "status_changes": [
     {
@@ -135,6 +135,480 @@
       "previous_status": "ineligible-expired",
       "new_status": "ineligible-unqualified",
       "date_status_change": "2026-02-10"
+    },
+    {
+      "address": "0x0ee85c30ff1797d9f041261b88c4a58d6d68fbbf",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x0fd8fd1dc8162148cb9413062fe6c6b144335dbf",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x2121bc6437100fc21d19a9eea30898419e020afa",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x269ebeee083ce6f70486a67dc8036a889bf322a9",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x326c584e0f0eab1f1f83c93cc6ae1acc0feba0bc",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x6f8a032b4b1ee622ef2f0fc091bdbb98cfae81a3",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x74dbb201ecc0b16934e68377bc13013883d9417b",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x7bb834017672b1135466661d8dd69c5dd0b3bf51",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x9082f497bdc512d08ffde50d6fce28e72c2addcf",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x920fdeb00ee04dd72f62d8a8f80f13c82ef76c1e",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xa181d0f242b3730f8a244cc94eda05faf17a43e8",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xd9819426c82e2b8fc58b9b62a78efe93f78077c6",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xdecba5154aab37ae5e381a19f804f3af4d1bcbb5",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe48b586eeb81bde60f14b0b8d80ddd06c7a24720",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe91273727203bcc827521fc8b0c762d435c3c5d0",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x0ee85c30ff1797d9f041261b88c4a58d6d68fbbf",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x0fd8fd1dc8162148cb9413062fe6c6b144335dbf",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x2121bc6437100fc21d19a9eea30898419e020afa",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x269ebeee083ce6f70486a67dc8036a889bf322a9",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x326c584e0f0eab1f1f83c93cc6ae1acc0feba0bc",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x6f8a032b4b1ee622ef2f0fc091bdbb98cfae81a3",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x74dbb201ecc0b16934e68377bc13013883d9417b",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x7bb834017672b1135466661d8dd69c5dd0b3bf51",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x9082f497bdc512d08ffde50d6fce28e72c2addcf",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x920fdeb00ee04dd72f62d8a8f80f13c82ef76c1e",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xa181d0f242b3730f8a244cc94eda05faf17a43e8",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xd9819426c82e2b8fc58b9b62a78efe93f78077c6",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xdecba5154aab37ae5e381a19f804f3af4d1bcbb5",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe48b586eeb81bde60f14b0b8d80ddd06c7a24720",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe91273727203bcc827521fc8b0c762d435c3c5d0",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x0058223c6617cca7ce76fc929ec9724cd43d4542",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x0874e792462406dc12ee96b75e52a3bdbba3a123",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x089f78d8cf0a5ae1b7a581b1910a73f8cb3e4774",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x090f7382f9ea85c733cd501f4d87f16cb5b83ed3",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x0a015d9e17d3978164486473a2ddbb654418db07",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x0ee85c30ff1797d9f041261b88c4a58d6d68fbbf",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x1b7e0068ca1d7929c8c56408d766e1510e54d98d",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x1b92e4cba0f82c85c1298af861247849988c788c",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x2b3c7d1ef5fdfc0557934019c531d3e70d6200ae",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x2f09092aacd80196fc984908c5a9a7ab3ee4f1ce",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x326c584e0f0eab1f1f83c93cc6ae1acc0feba0bc",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x35917c0eb91d2e21bef40940d028940484230c06",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x3717cef8020bddee7a18f4efb2bfa88fefdcb1bc",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x38f412c8d6346a17a53ff9ceecd2e01acecd27c0",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x3b9ba748691f135b71582dc3292e5e3ed7e13341",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x3e1536fc83cd5bed83a521a26034ff3e59c6a7c4",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x4d67938e9b07681526fe0345a45b770bba88c659",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x4e5c87772c29381bcabc58c3f182b6633b5a274a",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x53dbbc9d916b1840a2c4c26b150ba2e13f36e10f",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x550c1f4814a85aa10f5f061ca8c45e2ee9620226",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x5af569b692b0598721461027dbbecde74d465d99",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x600f2b53719e1dbacf340572b31a9df9921b82fa",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x63c9dc729ba7a22bb8605216b24a34b902e5fe94",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x6f9bb7e454f5b3eb2310343f0e99269dc2bb8a1d",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x8bbe94c2894f76406568dfb44e905dac4b7df699",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x8cc22436ba6f07a4d5dd2043e3109267eee5aab8",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x9af3fc811a66dbbca44acce94906d8743f9cf0d0",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0x9da1017766bfeb2835db4f811516eea68996538b",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xa181d0f242b3730f8a244cc94eda05faf17a43e8",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xa4d629ba2ffb3321008d8cec37cca077696bf24d",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xa6ff993e0f6253f1b7f55c873577a2f0f0ceb325",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xaddd3e23599d2b7267067afbcd18830aefca640a",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xb4b4570df6f7fe320f10fdfb702dba7e35244550",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xb8ca929e2bd96548cabcabc56cfc9a5147cef0ff",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xbdfb5ee5a2abf4fc7bb1bd1221067aef7f9de491",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xdc53e62df89fd07b31ed4ff886397b9e7ae4625e",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xdc7daef4d0751a9f6ec28b06d6d9475b13eb0918",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xdecba5154aab37ae5e381a19f804f3af4d1bcbb5",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe0ceec6daa59cc951f3f71d6fc4221e55ef6c386",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe13840a2e92e0cb17a246609b432d0fa2e418774",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe6de2325ef1aac1f058fae59d3c38a472f569846",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xe9e284277648fcdb09b8efc1832c73c09b5ecf59",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xeccdf8231326a9c5aad32df76a633aaa4c49b104",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xedca8740873152ff30a2696add66d1ab41882beb",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xf00f7157fa8fd0420b87956d46058a16b2f23adc",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xf92f430dd8567b0d466358c79594ab58d919a6d4",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xfb168335f5a3868a03696904ed38fa95fd167c0e",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xfc842f81490dcb37e82d416b2d28327dfb24ba9a",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
+    },
+    {
+      "address": "0xfeff9093f6b32d0e5cddba743b06a1fedb87c004",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-07-24"
     }
   ]
 }

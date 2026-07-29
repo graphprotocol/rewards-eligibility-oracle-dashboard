@@ -21,7 +21,7 @@ import threading
 from database import (
     save_indexers, get_all_indexers, update_eligibility, log_status_change,
     get_previous_indexers, update_status_changes, save_ens_cache, load_ens_cache,
-    save_transaction, get_last_transaction, update_sync_state, set_metadata, get_metadata,
+    save_transaction, get_last_transaction as db_get_last_transaction, update_sync_state, set_metadata, get_metadata,
     calculate_continuous_streak, get_status_change_history
 )
 
@@ -473,7 +473,7 @@ except ImportError:
 
 def get_last_transaction_from_json(json_file: str = 'last_transaction.json') -> Optional[dict]:
     """Wrapper: now uses database instead of JSON file."""
-    return get_last_transaction()
+    return db_get_last_transaction()
 
 
 def save_transaction_to_json(transaction_data: dict, json_file: str = 'last_transaction.json') -> None:
