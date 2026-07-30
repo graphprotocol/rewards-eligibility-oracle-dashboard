@@ -1021,15 +1021,18 @@ def retrieveActiveIndexers(graph_api_key: str, output_file: str = 'active_indexe
             except Exception as e:
                 print(f"⚠ Warning: Could not load previous file: {e}")
         
-        # Process each indexer without ENS name
+        # Process each indexer, attaching the resolved ENS name so it persists
+        # into the per-environment JSON (and thus the embedded environmentData
+        # used by the environment-toggle view, not just the static table).
         for indexer in indexers_raw:
             address = indexer.get("id", "")
-            
+
             # Get previous last_renewed_on_tx value if exists
             previous_tx = previous_indexers_map.get(address.lower(), "")
-            
+
             indexer_data = {
                 "address": address,
+                "ens_name": ens_mapping.get(address.lower(), ""),
                 "is_eligible": False,
                 "status": "",
                 "eligible_until": "",
