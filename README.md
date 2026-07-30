@@ -26,19 +26,27 @@ cp env.example .env
 
 # Edit .env with your API keys and RPC endpoints, then:
 python3 generate_dashboard.py
-open index.html
+open output/index.html
 ```
 
+> The dashboard is written to `output/index.html` (override with `REO_OUTPUT_DIR`).
+> Each environment queries its own chain, so mainnet needs `RPC_ENDPOINT_MAINNET`
+> and testnet needs `RPC_ENDPOINT_TESTNET` (see [env.example](env.example)).
+
 ## Environments
+
+Contract addresses are resolved dynamically per network from the [GitHub registry](https://github.com/graphprotocol/contracts/blob/main/packages/issuance/addresses.json) (`addresses.json`). The values below reflect the current registry entries:
 
 | Environment | Contract Address | Network |
 |-------------|-----------------|---------|
 | **mainnet** | `0x8ec2767a9d9ba02b4e09e8ff4fac2e14a340f304` | Arbitrum One (42161) |
-| **testnet** | `0x62c2305739cc75f19a3a6d52387ceb3690d99a99` | Arbitrum Sepolia (421614) |
+| **testnet** | `0x6ba849fbd33257162552578b2a432d30784f2f80` | Arbitrum Sepolia (421614) |
+
+The Sepolia registry exposes several oracle variants (`RewardsEligibilityOracleA/B/Mock`); the auto-pick lands on `A`. To pin an explicit address, set `TESTNET_CONTRACT_ADDRESS` (or `MAINNET_CONTRACT_ADDRESS`) in `.env`.
 
 ## Data Sources
 
-- **Network Subgraph**: Active indexers (stakedTokens > 0)
+- **Network Subgraph**: Active indexers (stakedTokens > 0) — both environments query the Arbitrum One network subgraph, so testnet scores the real mainnet indexer set against the testnet oracle
 - **ENS Subgraph**: Indexer ENS names
 - **RPC Calls**: Contract state (eligibility, timestamps)
 - **GitHub Registry**: Contract addresses ([addresses.json](https://github.com/graphprotocol/contracts/blob/main/packages/issuance/addresses.json))

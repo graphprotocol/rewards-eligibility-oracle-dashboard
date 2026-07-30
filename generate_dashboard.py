@@ -202,18 +202,6 @@ def get_environments_config() -> dict:
         # Try to get from environment variable
         mainnet_address = os.getenv("MAINNET_CONTRACT_ADDRESS", "")
 
-    # Get testnet_new address from .env (for testing alternative deployments)
-    testnet_new_address = os.getenv("TESTNET_NEW_CONTRACT_ADDRESS", "")
-    testnet_new_deployment_block = None
-    if testnet_new_address:
-        # Try to get deployment block from env var
-        testnet_new_block = os.getenv("TESTNET_NEW_DEPLOYMENT_BLOCK", "")
-        if testnet_new_block:
-            try:
-                testnet_new_deployment_block = int(testnet_new_block)
-            except ValueError:
-                testnet_new_deployment_block = None
-
     environments = {
         "mainnet": {
             "name": "Arbitrum One",
@@ -232,41 +220,6 @@ def get_environments_config() -> dict:
             "explorer_url": "https://sepolia.arbiscan.io",
         },
     }
-
-    # Add testnet_new environment only if address is configured
-    if testnet_new_address:
-        environments["testnet_new"] = {
-            "name": "Arbitrum Sepolia (New Deployment)",
-            "network_id": 421614,
-            "rpc_manager": RoundRobinRPC(network="testnet"),
-            "contract_address": testnet_new_address,
-            "deployment_block": testnet_new_deployment_block,
-            "explorer_url": "https://sepolia.arbiscan.io",
-        }
-
-    # Add testnet_old environment (implementation address) for comparison
-    # This allows comparing current proxy deployment with previous implementation
-    testnet_old_address = addresses.get("421614", {}).get("RewardsEligibilityOracle", {}).get("implementation", "")
-    testnet_old_deployment_block = None
-    if testnet_old_address:
-        # Try to get deployment block from implementation deployment
-        impl_deployment = addresses.get("421614", {}).get("RewardsEligibilityOracle", {}).get("implementationDeployment", {})
-        testnet_old_deployment_block = impl_deployment.get("blockNumber")
-        if testnet_old_deployment_block:
-            try:
-                testnet_old_deployment_block = int(testnet_old_deployment_block)
-            except (ValueError, TypeError):
-                testnet_old_deployment_block = None
-
-    if testnet_old_address:
-        environments["testnet_old"] = {
-            "name": "Arbitrum Sepolia (Previous Implementation)",
-            "network_id": 421614,
-            "rpc_manager": RoundRobinRPC(network="testnet"),
-            "contract_address": testnet_old_address,
-            "deployment_block": testnet_old_deployment_block,
-            "explorer_url": "https://sepolia.arbiscan.io",
-        }
 
     return environments
 
