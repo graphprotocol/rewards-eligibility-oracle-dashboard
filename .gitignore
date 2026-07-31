@@ -56,3 +56,6 @@ cron.log
 
 # Authentication files (contains sensitive data)
 allowed_people.txt
+
+# wrangler (CF Pages) local cache/state
+.wrangler/
