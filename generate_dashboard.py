@@ -1673,25 +1673,77 @@ def generate_html_dashboard(
         eligibility_period = get_eligibility_period(contract_address, rpc_manager)
     
     html_content = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="gds-light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eligibility Dashboard</title>
+    <!-- The Graph Design System: Euclid Circular (real, licensed) font + design tokens.
+         Compiled by the Dockerfile `gds-build` stage / scripts/build_gds_tokens.sh into
+         gds.css. The Poppins <link> below is kept inactive as a fallback for local runs
+         where gds.css has not been built; --font-sans also carries a Poppins fallback. -->
+    <link rel="stylesheet" href="gds.css">
+    <script>
+      // Apply the saved GDS theme before first paint to avoid a flash of the wrong
+      // theme. Defaults to light. Mirrors the gdsTheme localStorage key used by
+      // toggleTheme() below; <html> already carries .gds-light as a no-JS fallback.
+      (function () {{
+        var c = document.documentElement.classList;
+        c.remove('gds-light', 'gds-dark');
+        c.add(localStorage.getItem('gdsTheme') === 'dark' ? 'gds-dark' : 'gds-light');
+      }})();
+    </script>
+    <!-- Inactive fallback font (used only if gds.css is absent):
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    -->
     <style>
+        /* GDS token kitchen-sink: Tailwind v4 only emits a light-dark() semantic token
+           when a utility class referencing it is scanned. @source (in the Dockerfile
+           gds-build stage) reads this file as plain text, so listing the class names
+           below forces every semantic token + theme class to compile into gds.css
+           unconditionally. These are consumed via var() in the rules below — do not
+           remove, and do not convert them into real class attributes.
+           Classes scanned: text-default text-muted bg-canvas bg-surface border-subtle
+                            border-default gds-light gds-dark font-sans */
         /* The Graph Brand Colors */
         :root {{
-            --graph-purple: #6F4CFF;
-            --graph-blue: #4C66FF;
-            --graph-turquoise: #66D8FF;
+            /* Brand primitives — aliased to The Graph Design System (GDS) tokens.
+               Each var() carries the original hex as a fallback so the dashboard still
+               renders if the compiled gds.css is not linked (e.g. a local run). */
+            --graph-purple: var(--color-brand-500, #6F4CFF);
+            --graph-blue: var(--color-brand-400, #4C66FF);
+            --graph-turquoise: #66D8FF;          /* accent, no direct GDS token — literal */
+
+            /* Functional status colors — deliberately fixed (not brand) so status
+               meaning stays unambiguous in both light and dark themes. */
             --graph-green: #4BCA81;
             --graph-yellow: #FFA801;
             --graph-red: #ED34A6D;
             --graph-gray: #494755;
-            --galaxy-dark: #0C0A1D;
-            --spacesuit-white: #F8F6FF;
-            --lunar-gray: #1a1a2e;
+
+            /* Fixed dark/light values for surfaces that stay constant in both themes
+               (breadcrumb bar, tooltips). */
+            --galaxy-dark: var(--color-space-1700, #0C0A1D);
+            --spacesuit-white: #F8F6FF;  /* dual-use text/tooltip color; fixed in both themes */
+
+            /* Semantic aliases — the underlying GDS tokens use the native CSS
+               light-dark() function, so these flip with the .gds-light/.gds-dark theme
+               applied on <html>. The hand-written rules below consume them as
+               var(--reo-*) so layout/structure stays untouched. */
+            --reo-canvas: var(--background-color-canvas, #F8F6FF);
+            --reo-surface: var(--background-color-canvas, #FFFFFF);  /* GDS 0.6 has no surface token; track canvas */
+            --reo-border: var(--border-color-subtle, rgba(111, 76, 255, 0.2));
+            --reo-border-strong: var(--border-color-default, #6F4CFF);
+            --reo-text-muted: var(--text-color-muted, #9CA3AF);
+
+            /* Default body/copy text — now flips with the theme (was a fixed dark navy). */
+            --lunar-gray: var(--text-color-default, #1a1a2e);
+
+            /* Tokens referenced by .status-legend that were previously undefined (so the
+               legend rendered with no background/border). Defined here, theme-aware. */
+            --card-bg: var(--reo-surface);
+            --border-color: var(--reo-border);
+            --text-primary: var(--text-color-default, #1a1a2e);
         }}
 
         * {{
@@ -1701,7 +1753,7 @@ def generate_html_dashboard(
         }}
 
         body {{
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: var(--font-sans, 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
             font-weight: 400;
             background: linear-gradient(135deg, var(--graph-purple) 0%, var(--graph-blue) 50%, var(--galaxy-dark) 100%);
             color: var(--lunar-gray);
@@ -1776,7 +1828,7 @@ def generate_html_dashboard(
         .container {{
             max-width: 1400px;
             margin: 0 auto;
-            background: var(--spacesuit-white);
+            background: var(--reo-canvas);
             border-radius: 20px;
             padding: 40px;
             box-shadow: 0 20px 60px rgba(12, 10, 29, 0.4);
@@ -1836,10 +1888,10 @@ def generate_html_dashboard(
             border: 2px solid var(--lunar-gray);
             border-radius: 25px;
             font-size: 16px;
-            font-family: 'Poppins', sans-serif;
+            font-family: var(--font-sans, 'Poppins', sans-serif);
             outline: none;
             transition: all 0.3s ease;
-            background: var(--spacesuit-white);
+            background: var(--reo-canvas);
             color: var(--lunar-gray);
         }}
 
@@ -1891,7 +1943,7 @@ def generate_html_dashboard(
             border-radius: 20px;
             font-weight: 600;
             font-size: 12px;
-            font-family: 'Poppins', sans-serif;
+            font-family: var(--font-sans, 'Poppins', sans-serif);
         }}
         
         .legend-badge.good {{
@@ -1969,14 +2021,14 @@ def generate_html_dashboard(
             padding: 10px 16px;
             border: 2px solid var(--graph-purple);
             border-radius: 8px;
-            background: var(--spacesuit-white);
+            background: var(--reo-canvas);
             color: var(--lunar-gray);
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s ease;
             outline: none;
-            font-family: 'Poppins', sans-serif;
+            font-family: var(--font-sans, 'Poppins', sans-serif);
         }}
 
         .environment-select:hover {{
@@ -2327,7 +2379,7 @@ def generate_html_dashboard(
             padding: 8px 16px;
             border: 1px solid rgba(156, 163, 175, 0.2);
             border-radius: 6px;
-            background: rgba(248, 246, 255, 0.95);
+            background: var(--reo-canvas);
             color: #9CA3AF;
             font-size: 13px;
             font-weight: 500;
@@ -2336,7 +2388,7 @@ def generate_html_dashboard(
         }}
 
         .sort-btn:hover {{
-            background: rgba(248, 246, 255, 1);
+            background: var(--reo-surface);
         }}
 
         .sort-btn.active {{
@@ -2359,11 +2411,11 @@ def generate_html_dashboard(
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
-            background: rgba(248, 246, 255, 0.95);
+            background: var(--reo-canvas);
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            border: 1px solid rgba(111, 76, 255, 0.2);
+            border: 1px solid var(--reo-border);
         }}
 
         th {{
@@ -2378,7 +2430,7 @@ def generate_html_dashboard(
             cursor: pointer;
             user-select: none;
             position: relative;
-            border-bottom: 1px solid rgba(111, 76, 255, 0.2);
+            border-bottom: 1px solid var(--reo-border);
         }}
         
         th:hover {{
@@ -2403,7 +2455,7 @@ def generate_html_dashboard(
         
         td {{
             padding: 18px 15px;
-            border-bottom: 1px solid rgba(111, 76, 255, 0.15);
+            border-bottom: 1px solid var(--reo-border);
             font-size: 14px;
             color: var(--lunar-gray);
         }}
@@ -2491,7 +2543,7 @@ def generate_html_dashboard(
         }}
         
         .ens-name {{
-            color: #F8F6FF;
+            color: var(--text-color-default, #1a1a2e);
             font-weight: 500;
         }}
         
@@ -2505,23 +2557,23 @@ def generate_html_dashboard(
             justify-content: space-between;
             align-items: center;
             padding: 20px 30px;
-            background: rgba(248, 246, 255, 0.95);
-            border-top: 1px solid rgba(111, 76, 255, 0.2);
+            background: var(--reo-canvas);
+            border-top: 1px solid var(--reo-border);
             font-size: 14px;
             color: var(--lunar-gray);
         }}
         
         .total-count {{
             font-weight: 600;
-            color: #F8F6FF;
+            color: var(--text-color-default, #1a1a2e);
         }}
         
         .filtered-count {{
-            color: #F8F6FF;
+            color: var(--text-color-default, #1a1a2e);
         }}
         
         .transaction-hash {{
-            color: #F8F6FF;
+            color: var(--text-color-default, #1a1a2e);
             text-decoration: none;
             transition: color 0.3s ease;
             display: inline-flex;
@@ -2622,7 +2674,7 @@ def generate_html_dashboard(
 
         .footer {{
             padding: 20px 30px;
-            background: rgba(248, 246, 255, 0.8);
+            background: var(--reo-canvas);
             color: var(--lunar-gray);
             font-size: 14px;
             margin-top: 0;
@@ -2659,7 +2711,7 @@ def generate_html_dashboard(
         }}
         
         .footer a:hover {{
-            color: #F8F6FF;
+            color: var(--text-color-default, #1a1a2e);
             text-decoration: underline;
         }}
         
@@ -2757,6 +2809,13 @@ def generate_html_dashboard(
                     <select id="environment-select" class="environment-select" onchange="switchEnvironment(this.value)">
                         <!-- Options will be populated dynamically by JavaScript -->
                     </select>
+                    <!-- Light/Dark theme toggle — applies .gds-light/.gds-dark on <html>.
+                         Styled like the environment <select> for visual consistency. -->
+                    <button id="theme-toggle" class="environment-select" type="button"
+                            onclick="toggleTheme()" title="Toggle light/dark theme"
+                            aria-label="Toggle light and dark theme">
+                        <span id="theme-toggle-label">🌙</span>
+                    </button>
                 </div>
                 <!-- Contract Info Display -->
                 <div class="contract-info-inline" id="contract-info">
@@ -2988,6 +3047,29 @@ def generate_html_dashboard(
             }}) + ' UTC';
         }}
 
+        // ---- Light/Dark theme toggle ----
+        // Mirrors the selectedEnvironment localStorage pattern. Toggling swaps the
+        // .gds-light/.gds-dark class on <html>, which flips every GDS light-dark()
+        // token (and therefore every var(--reo-*) / var(--lunar-gray) rule) for the
+        // whole page. Default theme is light.
+        const GDS_THEME_KEY = 'gdsTheme';
+        function applyTheme(theme) {{
+            const isDark = theme === 'dark';
+            const html = document.documentElement;
+            html.classList.remove('gds-light', 'gds-dark');
+            html.classList.add(isDark ? 'gds-dark' : 'gds-light');
+            const label = document.getElementById('theme-toggle-label');
+            if (label) {{
+                // Icon shows the theme you can switch TO.
+                label.textContent = isDark ? '☀️' : '🌙';
+            }}
+        }}
+        function toggleTheme() {{
+            const next = (localStorage.getItem(GDS_THEME_KEY) === 'dark') ? 'light' : 'dark';
+            localStorage.setItem(GDS_THEME_KEY, next);
+            applyTheme(next);
+        }}
+
         // Switch environment function
         function switchEnvironment(envKey) {{
             const data = environmentData[envKey];
@@ -3194,6 +3276,11 @@ def generate_html_dashboard(
         }}
 
         document.addEventListener('DOMContentLoaded', () => {{
+            // Apply saved (or default light) GDS theme. The inline <head> script
+            // already did this before paint to avoid a flash; this keeps the toggle
+            // button label in sync and covers any edge case.
+            applyTheme(localStorage.getItem(GDS_THEME_KEY) === 'dark' ? 'dark' : 'light');
+
             // Get saved environment or default to testnet
             const saved = localStorage.getItem('selectedEnvironment') || 'testnet';
 
@@ -3981,6 +4068,28 @@ def main():
 
     print(f"Dashboard generated successfully at {output_path}!")
     print(f"Open '{output_path}' in your browser to view the dashboard.")
+
+    # Copy compiled GDS assets (gds.css + Euclid Circular fonts) next to index.html so
+    # the static file server (Caddy) serves them. In Docker these are produced by the
+    # `gds-build` stage at /app/static/gds. For local runs, build them first with
+    # scripts/build_gds_tokens.sh (which writes them straight into the output dir); if
+    # they are absent we warn and skip — the dashboard still renders using the hex
+    # fallbacks baked into every var() in the <style> block (graceful degradation).
+    gds_src = '/app/static/gds'
+    gds_css_src = os.path.join(gds_src, 'gds.css')
+    gds_fonts_src = os.path.join(gds_src, 'fonts')
+    if os.path.isdir(gds_src):
+        if os.path.isfile(gds_css_src):
+            shutil.copy2(gds_css_src, os.path.join(output_dir, 'gds.css'))
+            print(f"Copied GDS stylesheet to {output_dir}/gds.css")
+        if os.path.isdir(gds_fonts_src):
+            shutil.copytree(gds_fonts_src, os.path.join(output_dir, 'fonts'), dirs_exist_ok=True)
+            print(f"Copied GDS fonts to {output_dir}/fonts/")
+    elif not os.path.isfile(os.path.join(output_dir, 'gds.css')):
+        print("Info: compiled GDS assets not found (/app/static/gds absent). For full "
+              "The Graph Design System styling (design tokens, Euclid Circular font, and "
+              "the light/dark theme switcher), run scripts/build_gds_tokens.sh first or "
+              "build via Docker. The dashboard still renders using baked-in CSS fallbacks.")
 
     # Log execution time
     end_time = datetime.now(timezone.utc)
