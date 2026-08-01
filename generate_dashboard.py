@@ -12,6 +12,9 @@ import os
 import json
 import requests
 import shutil
+import re
+import subprocess
+import tempfile
 from datetime import datetime, timezone
 from typing import List, Tuple, Optional
 from dotenv import load_dotenv
@@ -1612,2126 +1615,240 @@ def renderIndexerTable(json_file: str = 'active_indexers.json', network_id: str 
         return []
 
 
-def generate_html_dashboard(
-    indexers: List[Tuple[str, str]],
-    contract_address: str,
-    api_key: Optional[str] = None,
-    rpc_manager: Optional[RoundRobinRPC] = None,
-    environment_data: Optional[dict] = None,
-    chainid: str = "421614"
-) -> str:
+ELIGIBILITY_CRITERIA_URL = (
+    "https://github.com/graphprotocol/rewards-eligibility-oracle"
+    "/blob/main/ELIGIBILITY_CRITERIA.md#active-eligibility-criteria"
+)
+
+_ELIGIBILITY_CRITERIA_RAW = (
+    "https://raw.githubusercontent.com/graphprotocol/rewards-eligibility-oracle"
+    "/main/ELIGIBILITY_CRITERIA.md"
+)
+
+# Used only when the document cannot be fetched. Kept deliberately short: a
+# stale criteria list is worse than an honest link, so the UI labels this as a
+# fallback when it is used.
+_ELIGIBILITY_CRITERIA_FALLBACK = [
+    {"label": "Days Online", "detail": "Active for 5+ days in a given 28 day period.", "children": []},
+    {"label": "Daily Query", "detail": "At least 1 qualifying query on each active day.", "children": []},
+    {
+        "label": "Query Quality",
+        "detail": "A qualifying query must meet all of the following:",
+        "children": [
+            "HTTP status: 200 OK.",
+            "Latency: under 5,000 ms.",
+            "Freshness: fewer than 50,000 blocks behind chainhead.",
+        ],
+    },
+]
+
+
+def _strip_markdown(text: str) -> str:
+    """Flatten the small subset of markdown used in the criteria bullets."""
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)   # links -> label
+    text = text.replace("**", "").replace("*", "")
+    return " ".join(text.split())
+
+
+def fetch_eligibility_criteria() -> dict:
     """
-    Generate the HTML dashboard content with multi-environment support.
+    Fetch the Active Eligibility Criteria that the oracle actually applies.
 
-    Args:
-        indexers: List of (address, ens_name) tuples (legacy parameter, not used)
-        contract_address: The contract address (for backward compatibility)
-        api_key: Arbiscan API key
-        rpc_manager: RPC manager for contract calls
-        environment_data: Dict containing data for all environments
-        chainid: Chain ID (string) for the primary environment's last-transaction
-            lookup. Defaults to "421614" (Arbitrum Sepolia).
+    The criteria live in the oracle's own repository and change over time (the
+    document carries an explicit "Upcoming" section), so they are read at
+    generation time rather than hardcoded here. Indexers seeing stale
+    requirements would be worse than showing none.
 
-    Returns:
-        Complete HTML content as string
+    Returns a dict with the parsed bullets, the canonical source URL, and
+    whether the built-in fallback had to be used.
     """
-    current_time = datetime.now(timezone.utc).strftime("%d %b %Y at %H:%M (UTC)")
-    
-    # Load all indexers from JSON file
-    print("Loading indexers for dashboard...")
-    all_indexers = renderIndexerTable()
-    
-    # Fetch last transaction data
-    print("Fetching last transaction data...")
-    last_transaction: Optional[dict] = None
-    
-    # Fetch via Arbiscan API
-    if api_key:
-        last_transaction = get_last_transaction(contract_address, api_key, chainid=chainid)
-    
-    # Fallback: load from local JSON file (cached data)
-    if not last_transaction:
-        print("⚠ Warning: Could not fetch fresh transaction data from API, using cached data")
-        last_transaction = get_last_transaction_from_json()
-    
-    # Save transaction data with script run timestamp
-    if last_transaction:
-        save_transaction_to_json(last_transaction)
-    
-    # Fetch oracle update time from contract
-    print("Fetching oracle update time from contract...")
-    oracle_update_time: Optional[int] = None
-    if rpc_manager is None:
-        rpc_manager = get_rpc_manager()
-    if rpc_manager.endpoints:
-        oracle_update_time = get_oracle_update_time(contract_address, rpc_manager)
-    
-    # Fetch eligibility period from contract
-    print("Fetching eligibility period from contract...")
-    eligibility_period: Optional[int] = None
-    if rpc_manager.endpoints:
-        eligibility_period = get_eligibility_period(contract_address, rpc_manager)
-    
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eligibility Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <style>
-        /* The Graph Brand Colors */
-        :root {{
-            --graph-purple: #6F4CFF;
-            --graph-blue: #4C66FF;
-            --graph-turquoise: #66D8FF;
-            --graph-green: #4BCA81;
-            --graph-yellow: #FFA801;
-            --graph-red: #ED34A6D;
-            --graph-gray: #494755;
-            --galaxy-dark: #0C0A1D;
-            --spacesuit-white: #F8F6FF;
-            --lunar-gray: #1a1a2e;
-        }}
-
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-
-        body {{
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-weight: 400;
-            background: linear-gradient(135deg, var(--graph-purple) 0%, var(--graph-blue) 50%, var(--galaxy-dark) 100%);
-            color: var(--lunar-gray);
-            line-height: 1.6;
-            min-height: 100vh;
-            padding: 20px;
-        }}
-        
-        .breadcrumb {{
-            max-width: 1200px;
-            margin: 0 auto 15px auto;
-            padding: 12px 20px;
-            background: rgba(12, 10, 29, 0.6);
-            border-radius: 8px;
-            border: 1px solid #9CA3AF;
-            color: #F8F6FF;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }}
-        
-        .breadcrumb a {{
-            color: #9CA3AF;
-            text-decoration: none;
-            transition: color 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }}
-        
-        .breadcrumb a:hover {{
-            color: #F8F6FF;
-        }}
-        
-        .breadcrumb-separator {{
-            color: #9CA3AF;
-            margin: 0 4px;
-            font-weight: 300;
-        }}
-        
-        .home-icon {{
-            width: 16px;
-            height: 16px;
-            display: inline-block;
-            position: relative;
-        }}
-        
-        .home-icon::before {{
-            content: '';
-            position: absolute;
-            left: 50%;
-            top: 0;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-bottom: 8px solid currentColor;
-        }}
-        
-        .home-icon::after {{
-            content: '';
-            position: absolute;
-            left: 2px;
-            bottom: 0;
-            width: 12px;
-            height: 9px;
-            background-color: currentColor;
-        }}
-        
-        .container {{
-            max-width: 1400px;
-            margin: 0 auto;
-            background: var(--spacesuit-white);
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(12, 10, 29, 0.4);
-        }}
-
-        .header {{
-            text-align: center;
-            margin-bottom: 40px;
-            padding-bottom: 30px;
-            border-bottom: 2px solid rgba(111, 76, 255, 0.16);
-            position: relative;
-        }}
-
-        .title-container {{
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            justify-content: center;
-        }}
-
-        .header-icon {{
-            font-size: 3.5em;
-        }}
-
-        .header h1 {{
-            font-size: 3.5em;
-            color: var(--graph-purple);
-            margin: 0;
-            font-weight: 700;
-        }}
-
-        .header .subtitle {{
-            font-size: 1.1em;
-            color: var(--lunar-gray);
-            font-weight: 400;
-            letter-spacing: 0.5px;
-        }}
-        
-        .search-container {{
-            padding: 0 0 25px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
-        }}
-
-        .search-wrapper {{
-            flex: 0 0 45%;
-            min-width: 300px;
-            max-width: 500px;
-        }}
-
-        .search-box {{
-            width: 100%;
-            padding: 12px 20px;
-            border: 2px solid var(--lunar-gray);
-            border-radius: 25px;
-            font-size: 16px;
-            font-family: 'Poppins', sans-serif;
-            outline: none;
-            transition: all 0.3s ease;
-            background: var(--spacesuit-white);
-            color: var(--lunar-gray);
-        }}
-
-        .search-box:focus {{
-            border-color: var(--graph-purple);
-            box-shadow: 0 0 0 3px rgba(111, 76, 255, 0.1);
-        }}
-
-        .search-box::placeholder {{
-            color: var(--lunar-gray);
-            opacity: 0.5;
-        }}
-
-        .filter-wrapper {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }}
-
-        .legend {{
-            padding: 20px 0 30px 0;
-        }}
-
-        .legend-title {{
-            color: var(--lunar-gray);
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            text-align: center;
-        }}
-
-        .legend-items {{
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }}
-
-        .legend-item {{
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-        }}
-
-        .legend-badge {{
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 12px;
-            font-family: 'Poppins', sans-serif;
-        }}
-        
-        .legend-badge.good {{
-            background: rgba(75, 202, 129, 0.15);
-            color: #4BCA81;
-            border: 1px solid var(--graph-green);
-        }}
-
-        .legend-badge.grace {{
-            background: rgba(255, 168, 1, 0.15);
-            color: #FFA801;
-            border: 1px solid var(--graph-yellow);
-        }}
-
-        .legend-badge.ineligible {{
-            background: rgba(237, 74, 109, 0.15);
-            color: #ED34A6D;
-            border: 1px solid var(--graph-red);
-        }}
-
-        .legend-description {{
-            color: var(--lunar-gray);
-            font-size: 12px;
-            opacity: 0.7;
-        }}
-
-        .gip-banner {{
-            padding: 15px 30px;
-            background: rgba(111, 76, 255, 0.08);
-            border-bottom: 1px solid rgba(111, 76, 255, 0.16);
-            text-align: center;
-            font-size: 14px;
-            color: var(--lunar-gray);
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }}
-
-        .gip-banner a {{
-            color: var(--graph-purple);
-            text-decoration: none;
-            font-weight: 600;
-            transition: color 0.3s ease;
-        }}
-
-        .gip-banner a:hover {{
-            color: var(--graph-blue);
-            text-decoration: underline;
-        }}
-
-        /* Environment Toggle Styles */
-        .environment-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-            padding: 20px 0;
-            border-bottom: 1px solid rgba(111, 76, 255, 0.1);
-            margin-bottom: 20px;
-        }}
-
-        .environment-select-wrapper {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-
-        .environment-label {{
-            font-weight: 600;
-            color: var(--lunar-gray);
-            font-size: 14px;
-        }}
-
-        .environment-select {{
-            padding: 10px 16px;
-            border: 2px solid var(--graph-purple);
-            border-radius: 8px;
-            background: var(--spacesuit-white);
-            color: var(--lunar-gray);
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            outline: none;
-            font-family: 'Poppins', sans-serif;
-        }}
-
-        .environment-select:hover {{
-            border-color: var(--graph-blue);
-            box-shadow: 0 0 0 3px rgba(76, 102, 255, 0.1);
-        }}
-
-        .environment-select:focus {{
-            border-color: var(--graph-blue);
-            box-shadow: 0 0 0 3px rgba(76, 102, 255, 0.2);
-        }}
-
-        .update-controls {{
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-top: 30px;
-        }}
-
-        .contract-info-inline {{
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            font-size: 14px;
-        }}
-
-        .contract-info-inline .contract-item {{
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }}
-
-        .contract-info-inline a {{
-            color: var(--graph-blue);
-            text-decoration: none;
-            font-weight: 500;
-        }}
-
-        .contract-info-inline a:hover {{
-            text-decoration: underline;
-        }}
-
-        .environment-indicator {{
-            display: flex;
-            justify-content: flex-end;
-        }}
-
-        .env-badge {{
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 14px;
-            color: white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-            transition: all 0.3s ease;
-        }}
-
-        .env-badge.mainnet {{
-            background: linear-gradient(135deg, #4CAF50, #45a049);
-        }}
-
-        .env-badge.testnet {{
-            background: linear-gradient(135deg, #FF9800, #F57C00);
-        }}
-
-        .env-icon {{
-            font-size: 16px;
-        }}
-
-        .env-name {{
-            font-size: 14px;
-        }}
-
-        /* Contract Info Styles */
-        .contract-info {{
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 30px;
-            flex-wrap: wrap;
-            padding: 12px 20px;
-            background: rgba(111, 76, 255, 0.05);
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 13px;
-            color: var(--lunar-gray);
-        }}
-
-        .contract-item {{
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }}
-
-        .contract-info a {{
-            color: var(--graph-purple);
-            text-decoration: none;
-            font-weight: 600;
-            transition: color 0.3s ease;
-        }}
-
-        .contract-info a:hover {{
-            color: var(--graph-blue);
-            text-decoration: underline;
-        }}
-
-        @media (max-width: 768px) {{
-            .environment-header {{
-                flex-direction: column;
-                align-items: stretch;
-            }}
-
-            .environment-select-wrapper {{
-                justify-content: space-between;
-            }}
-
-            .environment-indicator {{
-                justify-content: center;
-            }}
-
-            .contract-info {{
-                flex-direction: column;
-                gap: 10px;
-            }}
-        }}
-
-        .counters-section {{
-            padding: 0 0 30px 0;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-            overflow: visible;
-        }}
-
-        .counter-item {{
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            position: relative;
-        }}
-
-        .counter-label {{
-            color: var(--lunar-gray);
-            font-size: 14px;
-            font-weight: 500;
-            text-align: center;
-            cursor: help;
-            position: relative;
-        }}
-
-        .counter-label[data-tooltip]::after {{
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-bottom: 8px;
-            padding: 8px 12px;
-            background: var(--galaxy-dark);
-            color: var(--spacesuit-white);
-            font-size: 12px;
-            font-weight: 400;
-            white-space: nowrap;
-            border-radius: 6px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-            border: 1px solid rgba(111, 76, 255, 0.3);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            z-index: 9999;
-        }}
-
-        .counter-label[data-tooltip]:hover::after {{
-            opacity: 1;
-        }}
-
-        .counter-label[data-tooltip]::before {{
-            content: '';
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-bottom: 2px;
-            border: 6px solid transparent;
-            border-top-color: #9CA3AF;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-            z-index: 9999;
-        }}
-        
-        .counter-label[data-tooltip]:hover::before {{
-            opacity: 1;
-        }}
-        
-        .counter-value {{
-            color: var(--lunar-gray);
-            font-size: 32px;
-            font-weight: 600;
-            text-align: center;
-        }}
-        
-        .counter-value.eligible-count {{
-            color: #22c55e;
-        }}
-        
-        .counter-value.grace-count {{
-            color: #eab308;
-        }}
-        
-        .counter-value.ineligible-count {{
-            color: #ef4444;
-        }}
-        
-        .filter-label {{
-            color: #9CA3AF;
-            font-size: 14px;
-            font-weight: 500;
-            margin-right: 5px;
-        }}
-        
-        .filter-btn {{
-            padding: 6px 14px;
-            border-radius: 12px;
-            font-weight: 500;
-            font-size: 12px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-        }}
-        
-        .filter-btn:hover {{
-            opacity: 0.8;
-            transform: translateY(-1px);
-        }}
-        
-        .filter-btn[data-tooltip]::after {{
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-bottom: 8px;
-            padding: 8px 12px;
-            background: #1a1825;
-            color: #F8F6FF;
-            font-size: 12px;
-            font-weight: 400;
-            white-space: nowrap;
-            border-radius: 6px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-            border: 1px solid #9CA3AF;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            z-index: 9999;
-        }}
-        
-        .filter-btn[data-tooltip]:hover::after {{
-            opacity: 1;
-        }}
-        
-        .filter-btn[data-tooltip]::before {{
-            content: '';
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-bottom: 2px;
-            border: 6px solid transparent;
-            border-top-color: #9CA3AF;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-            z-index: 9999;
-        }}
-        
-        .filter-btn[data-tooltip]:hover::before {{
-            opacity: 1;
-        }}
-        
-        .filter-btn.eligible {{
-            background: rgba(34, 197, 94, 0.2);
-            color: #22c55e;
-            border: 1px solid #22c55e;
-        }}
-        
-        .filter-btn.eligible.active {{
-            background: #22c55e;
-            color: #0C0A1D;
-        }}
-        
-        .filter-btn.grace {{
-            background: rgba(251, 191, 36, 0.2);
-            color: #fbbf24;
-            border: 1px solid #fbbf24;
-        }}
-        
-        .filter-btn.grace.active {{
-            background: #fbbf24;
-            color: #0C0A1D;
-        }}
-        
-        .filter-btn.ineligible {{
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-            border: 1px solid #ef4444;
-        }}
-        
-        .filter-btn.ineligible.active {{
-            background: #ef4444;
-            color: #0C0A1D;
-        }}
-        
-        .filter-btn.reset {{
-            background: rgba(156, 163, 175, 0.2);
-            color: #9CA3AF;
-            border: 1px solid #9CA3AF;
-        }}
-        
-        .filter-btn.reset:hover {{
-            background: rgba(156, 163, 175, 0.3);
-        }}
-
-        .sort-wrapper {{
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 15px;
-        }}
-
-        .sort-label {{
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--lunar-gray);
-            margin-right: 10px;
-        }}
-
-        .sort-btn {{
-            padding: 8px 16px;
-            border: 1px solid rgba(156, 163, 175, 0.2);
-            border-radius: 6px;
-            background: rgba(248, 246, 255, 0.95);
-            color: #9CA3AF;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }}
-
-        .sort-btn:hover {{
-            background: rgba(248, 246, 255, 1);
-        }}
-
-        .sort-btn.active {{
-            background: rgba(156, 163, 175, 0.9);
-            color: white;
-            border-color: rgba(156, 163, 175, 0.4);
-        }}
-
-        .streak-days {{
-            text-align: center;
-            font-weight: 600;
-        }}
-
-        .table-container {{
-            padding: 0 30px 30px;
-            overflow-x: auto;
-        }}
-        
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            background: rgba(248, 246, 255, 0.95);
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            border: 1px solid rgba(111, 76, 255, 0.2);
-        }}
-
-        th {{
-            background: rgba(111, 76, 255, 0.1);
-            color: var(--lunar-gray);
-            padding: 20px 15px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            user-select: none;
-            position: relative;
-            border-bottom: 1px solid rgba(111, 76, 255, 0.2);
-        }}
-        
-        th:hover {{
-            background: rgba(111, 76, 255, 0.15);
-        }}
-        
-        th.sortable::after {{
-            content: ' ↕';
-            opacity: 0.5;
-            font-size: 12px;
-        }}
-        
-        th.sort-asc::after {{
-            content: ' ↑';
-            opacity: 1;
-        }}
-        
-        th.sort-desc::after {{
-            content: ' ↓';
-            opacity: 1;
-        }}
-        
-        td {{
-            padding: 18px 15px;
-            border-bottom: 1px solid rgba(111, 76, 255, 0.15);
-            font-size: 14px;
-            color: var(--lunar-gray);
-        }}
-        
-        /* Date hover tooltip styles */
-        .date-hover {{
-            position: relative;
-            cursor: help;
-        }}
-        
-        .date-hover[data-full-date]:hover::after {{
-            content: attr(data-full-date);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-bottom: 8px;
-            padding: 8px 12px;
-            background: #1a1825;
-            color: #F8F6FF;
-            font-size: 12px;
-            font-weight: 400;
-            white-space: nowrap;
-            border-radius: 6px;
-            border: 1px solid #9CA3AF;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
-            pointer-events: none;
-        }}
-        
-        .date-hover[data-full-date]:hover::before {{
-            content: '';
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-bottom: 2px;
-            border: 6px solid transparent;
-            border-top-color: #9CA3AF;
-            z-index: 1000;
-            pointer-events: none;
-        }}
-        
-        tr:hover {{
-            background-color: rgba(111, 76, 255, 0.08);
-        }}
-        
-        tr:nth-child(even) {{
-            background-color: rgba(111, 76, 255, 0.05);
-        }}
-
-        tr:nth-child(even):hover {{
-            background-color: rgba(111, 76, 255, 0.08);
-        }}
-        
-        .address {{
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: var(--lunar-gray);
-            word-break: break-all;
-        }}
-        
-        .address-link {{
-            text-decoration: none;
-            transition: opacity 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }}
-        
-        .address-link:hover .address {{
-            color: #9CA3AF;
-        }}
-        
-        .external-link-icon {{
-            width: 12px;
-            height: 12px;
-            opacity: 0.8;
-            transition: opacity 0.3s ease;
-            color: #9CA3AF;
-        }}
-        
-        .address-link:hover .external-link-icon {{
-            opacity: 1;
-        }}
-        
-        .ens-name {{
-            color: #F8F6FF;
-            font-weight: 500;
-        }}
-        
-        .empty-ens {{
-            color: #9CA3AF;
-            font-style: italic;
-        }}
-        
-        .stats {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 30px;
-            background: rgba(248, 246, 255, 0.95);
-            border-top: 1px solid rgba(111, 76, 255, 0.2);
-            font-size: 14px;
-            color: var(--lunar-gray);
-        }}
-        
-        .total-count {{
-            font-weight: 600;
-            color: #F8F6FF;
-        }}
-        
-        .filtered-count {{
-            color: #F8F6FF;
-        }}
-        
-        .transaction-hash {{
-            color: #F8F6FF;
-            text-decoration: none;
-            transition: color 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }}
-        
-        .transaction-hash:hover {{
-            color: #9CA3AF;
-        }}
-        
-        .transaction-hash:hover .external-link-icon {{
-            opacity: 1;
-        }}
-
-        /* Metadata Section */
-        .metadata-section {{
-            padding: 15px 30px;
-            background: rgba(111, 76, 255, 0.03);
-            border-top: 1px solid rgba(111, 76, 255, 0.1);
-            border-bottom: 1px solid rgba(111, 76, 255, 0.1);
-            margin-top: 30px;
-        }}
-
-        .metadata-content {{
-            max-width: 1140px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 30px;
-            flex-wrap: wrap;
-        }}
-
-        .metadata-item {{
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-        }}
-
-        .metadata-label {{
-            color: var(--lunar-gray);
-            font-weight: 500;
-        }}
-
-        .metadata-value {{
-            color: var(--graph-purple);
-        }}
-
-        .metadata-value a {{
-            color: var(--graph-purple);
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s ease;
-        }}
-
-        .metadata-value a:hover {{
-            color: var(--graph-blue);
-            text-decoration: underline;
-        }}
-
-        .status-legend {{
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 16px 20px;
-            margin: 20px 0;
-            max-width: 1140px;
-            margin-left: auto;
-            margin-right: auto;
-        }}
-
-        .status-legend h3 {{
-            margin: 0 0 12px 0;
-            font-size: 16px;
-            color: var(--text-primary);
-        }}
-
-        .legend-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 12px;
-        }}
-
-        .legend-item {{
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 8px 0;
-        }}
-
-        .legend-item .legend-description {{
-            color: var(--lunar-gray);
-            font-size: 14px;
-            line-height: 1.5;
-        }}
-
-        .footer {{
-            padding: 20px 30px;
-            background: rgba(248, 246, 255, 0.8);
-            color: var(--lunar-gray);
-            font-size: 14px;
-            margin-top: 0;
-        }}
-        
-        .footer-content {{
-            max-width: 1140px;
-            margin: 0 auto;
-        }}
-        
-        .footer-top {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-            gap: 10px;
-        }}
-        
-        .footer-left {{
-            text-align: left;
-            flex: 0 0 auto;
-        }}
-        
-        .footer-right {{
-            text-align: right;
-            flex: 0 0 auto;
-        }}
-        
-        .footer a {{
-            color: #9CA3AF;
-            text-decoration: none;
-            transition: color 0.3s ease;
-        }}
-        
-        .footer a:hover {{
-            color: #F8F6FF;
-            text-decoration: underline;
-        }}
-        
-        .version {{
-            font-weight: 600;
-            color: #9CA3AF;
-        }}
-        
-        .footer-separator {{
-            color: #9CA3AF;
-        }}
-        
-        .github-icon {{
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            vertical-align: middle;
-            margin-right: 5px;
-        }}
-        
-        .bell-icon {{
-            fill: #F8F6FF;
-            width: 16px;
-            height: 16px;
-            vertical-align: middle;
-            margin-right: 5px;
-        }}
-        
-        @media (max-width: 768px) {{
-            .container {{
-                margin: 10px;
-                border-radius: 10px;
-            }}
-            
-            .header {{
-                padding: 20px;
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 15px;
-            }}
-            
-            .title-container {{
-                gap: 10px;
-            }}
-            
-            .header-icon {{
-                width: 40px;
-                height: 40px;
-            }}
-            
-            .header h1 {{
-                font-size: 1.8em;
-            }}
-            
-            .search-container, .table-container {{
-                padding: 20px;
-            }}
-            
-            .footer-top {{
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 12px;
-            }}
-            
-            .footer-left,
-            .footer-right {{
-                text-align: left;
-                width: 100%;
-            }}
-            
-            .counters-section {{
-                flex-direction: column;
-                padding: 20px;
-            }}
-            
-            .stats {{
-                flex-direction: column;
-                gap: 10px;
-                text-align: center;
-            }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🍪 REO</h1>
-            <p class="subtitle">Rewards Eligibility Oracle - GIP-0079 Indexer Rewards</p>
-
-            <!-- Environment & Info Controls -->
-            <div class="update-controls">
-                <!-- Environment Toggle -->
-                <div class="environment-select-wrapper">
-                    <label for="environment-select" class="environment-label">Environment:</label>
-                    <select id="environment-select" class="environment-select" onchange="switchEnvironment(this.value)">
-                        <!-- Options will be populated dynamically by JavaScript -->
-                    </select>
-                </div>
-                <!-- Contract Info Display -->
-                <div class="contract-info-inline" id="contract-info">
-                    <span class="contract-item">Contract: <a href="#" id="contract-address" target="_blank">Loading...</a></span>
-                    <span class="contract-item" id="deployment-info">Deployed: Loading...</span>
-                </div>
-                <!-- Last Update -->
-                <span class="update-time" style="font-size: 0.85em; opacity: 0.7;">
-                    Last updated: {current_time}
-                </span>
-
-                <!-- Metadata Section -->
-                <div class="metadata-section" style="margin-top: 15px; padding: 12px 20px; background: rgba(111, 76, 255, 0.05); border-radius: 8px;">
-                    <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; font-size: 13px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="color: var(--lunar-gray); font-weight: 500;">Eligibility Criteria:</span>
-                            <span><a href="https://github.com/graphprotocol/rewards-eligibility-oracle/blob/main/ELIGIBILITY_CRITERIA.md#eligibility-criteria" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">Eligibility Criteria</a></span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="color: var(--lunar-gray); font-weight: 500;">Data Source:</span>
-                            <span><a href="https://github.com/graphprotocol/contracts/blob/main/packages/issuance/addresses.json" target="_blank" style="color: var(--graph-purple); text-decoration: none; font-weight: 500;">GitHub JSON Registry</a></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>"""
-    
-    # Calculate counters
-    total_indexers = len(all_indexers)
-    eligible_count = sum(1 for indexer in all_indexers if indexer.get("status") == "eligible-active")
-    grace_count = sum(1 for indexer in all_indexers if indexer.get("status") == "eligible-grace")
-    ineligible_count = sum(1 for indexer in all_indexers if indexer.get("status") in ["ineligible-expired", "ineligible-unqualified"])
-    
-    html_content += f"""
-        
-        <div class="gip-banner">
-            <svg class="bell-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg><a href="https://t.me/reo_dashboard_bot" target="_blank">Subscribe to real-time notifications on Telegram</a>
-        </div>
-        
-        <div class="counters-section">
-            <div class="counter-item">
-                <span class="counter-label" data-tooltip="Active indexers in The Graph Network">Active Indexers</span>
-                <span class="counter-value">{total_indexers}</span>
-            </div>
-            <div class="counter-item">
-                <span class="counter-label" data-tooltip="Eligible (Active): Indexers who are fully compliant">Eligible Indexers (Active)</span>
-                <span class="counter-value eligible-count">{eligible_count}</span>
-            </div>
-            <div class="counter-item">
-                <span class="counter-label" data-tooltip="Eligible (Grace): Indexers still eligible for rewards but need to renew soon to stay compliant">Eligible Indexers (Grace)</span>
-                <span class="counter-value grace-count">{grace_count}</span>
-            </div>
-            <div class="counter-item">
-                <span class="counter-label" data-tooltip="Ineligible: Either expired (previously eligible) or unqualified (never been eligible)">Ineligible Indexers</span>
-                <span class="counter-value ineligible-count">{ineligible_count}</span>
-            </div>
-        </div>
-        
-        <div class="search-container">
-            <div class="search-wrapper">
-                <input type="text" 
-                       class="search-box" 
-                       id="searchInput" 
-                       placeholder="Search by indexer address or ENS name..."
-                       autocomplete="off">
-            </div>
-            <div class="filter-wrapper">
-                <span class="filter-label">Filter by Status:</span>
-                <button class="filter-btn eligible" id="filterEligibleBtn" data-tooltip="Fully compliant indexers">Eligible - Active</button>"""
-    
-    # Add grace period tooltip if eligibility_period is available
-    grace_tooltip = ""
-    if eligibility_period:
-        days = int(eligibility_period / 86400)
-        grace_tooltip = f' data-tooltip="Still eligible but need to renew within {days} days"'
-    else:
-        grace_tooltip = ' data-tooltip="Still eligible but need to renew soon"'
-    
-    html_content += f"""
-                <button class="filter-btn grace" id="filterGraceBtn"{grace_tooltip}>Eligible - Grace</button>
-                <button class="filter-btn ineligible" id="filterIneligibleBtn" data-tooltip="Expired (previously eligible) or Unqualified (never eligible)">Ineligible</button>
-                <button class="filter-btn reset" id="resetFilterBtn" data-tooltip="Show All">Reset</button>
-            </div>
-            <div class="sort-wrapper">
-                <span class="sort-label">Sort by:</span>
-                <button class="sort-btn active" id="sortDefaultBtn" data-tooltip="Sort by status priority, then ENS name">Status Priority</button>
-                <button class="sort-btn" id="sortStreakBtn" data-tooltip="Sort by continuous eligibility streak days (longest streaks first)">Streak Days</button>
-            </div>
-        </div>
-
-        <div class="status-legend">
-            <h3>Status Legend</h3>
-            <div class="legend-grid">
-                <div class="legend-item">
-                    <span class="legend-badge good">Active</span>
-                    <span class="legend-description">Currently eligible for rewards (renewed recently)</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-badge grace">Grace</span>
-                    <span class="legend-description">Still eligible but needs to renew soon to stay compliant</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-badge ineligible">Expired</span>
-                    <span class="legend-description">Previously eligible but lost eligibility (renewal time passed)</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-badge ineligible">Unqualified</span>
-                    <span class="legend-description">Never been eligible (renewal time not set or invalid)</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="table-container">
-            <table id="indexersTable">
-                <thead>
-                    <tr>
-                        <th class="sortable" data-column="0">Indexer Address</th>
-                        <th class="sortable" data-column="1">ENS Name</th>
-                        <th class="sortable" data-column="2">Status</th>
-                        <th class="sortable" data-column="3">Streak Days</th>
-                        <th class="sortable" data-column="4">Last Renewed</th>
-                        <th class="sortable" data-column="5">Eligible Until</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-"""
-
-    # Sort indexers: first by status (eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified), then by ENS name
-    # Status priority mapping for default sorting
-    status_priority = {"eligible-active": 0, "eligible-grace": 1, "ineligible-expired": 2, "ineligible-unqualified": 3}
-
-    def sort_key(indexer, sort_mode="default"):
-        """Generate sort key for indexer based on sort mode."""
-        if sort_mode == "streak":
-            # Streak mode: sort by streak days (descending), then status priority, then ENS name
-            streak_days = indexer.get("continuous_streak_days", 0)
-            status = indexer.get("status", "ineligible-unqualified")
-            ens_name = indexer.get("ens_name", "")
-            return (-streak_days, status_priority.get(status, 4), ens_name.lower() if ens_name else "zzzzzzzzz")
-        else:
-            # Default mode: sort by status priority, then ENS name
-            status = indexer.get("status", "ineligible-unqualified")
-            ens_name = indexer.get("ens_name", "")
-            return (status_priority.get(status, 4), ens_name.lower() if ens_name else "zzzzzzzzz")
-
-    # Default sorting by status priority
-    all_indexers_sorted = sorted(all_indexers, key=lambda x: sort_key(x, sort_mode="default"))
-
-    # Add table rows from sorted indexers
-    for i, indexer in enumerate(all_indexers_sorted, 1):
-        address = indexer.get("address", "")
-        ens_name = indexer.get("ens_name", "")
-        status = indexer.get("status", "ineligible")
-        ens_display = ens_name if ens_name else "No ENS"
-        ens_class = "ens-name" if ens_name else "empty-ens"
-        explorer_url = f"https://thegraph.com/explorer/profile/{address}?view=Indexing&chain=arbitrum-one"
-        
-        # Get date formats
-        eligibility_renewal_time_short = indexer.get("eligibility_renewal_time_short", "Never")
-        eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
-        eligible_until_short = indexer.get("eligible_until_short", "")
-        eligible_until_readable = indexer.get("eligible_until_readable", "")
-        last_renewed_on_tx = indexer.get("last_renewed_on_tx", "")
-        
-        # Set status badge based on status
-        if status == "eligible-active":
-            status_badge = '<span class="legend-badge good">Active</span>'
-        elif status == "eligible-grace":
-            status_badge = '<span class="legend-badge grace">Eligible - Grace</span>'
-        elif status == "ineligible-expired":
-            status_badge = '<span class="legend-badge ineligible">Expired</span>'
-        else:  # ineligible-unqualified
-            status_badge = '<span class="legend-badge ineligible">Unqualified</span>'
-        
-        # Format Last Renewed cell with transaction link (no tooltip)
-        if eligibility_renewal_time_short == "Never":
-            last_renewed_cell = eligibility_renewal_time_short
-        else:
-            # If we have a transaction hash, make the date a link with external icon
-            if last_renewed_on_tx:
-                last_renewed_cell = f'<a href="https://sepolia.arbiscan.io/tx/{last_renewed_on_tx}" target="_blank" class="transaction-hash">{eligibility_renewal_time_short}<svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>'
+    try:
+        response = requests.get(_ELIGIBILITY_CRITERIA_RAW, timeout=15)
+        response.raise_for_status()
+        body = response.text
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"⚠ Could not fetch eligibility criteria ({exc}); using built-in fallback.")
+        return {
+            "items": _ELIGIBILITY_CRITERIA_FALLBACK,
+            "source_url": ELIGIBILITY_CRITERIA_URL,
+            "is_fallback": True,
+        }
+
+    # Take only the "Active Eligibility Criteria" section, stopping at the next
+    # heading or horizontal rule so the changelog below is never included.
+    match = re.search(
+        r"^##\s+Active Eligibility Criteria\s*$(.*?)^(?:##\s|---\s*$)",
+        body,
+        re.MULTILINE | re.DOTALL,
+    )
+    section = match.group(1) if match else ""
+
+    items: List[dict] = []
+    for line in section.splitlines():
+        if re.match(r"^\s*-\s+", line):
+            indent = len(line) - len(line.lstrip())
+            text = _strip_markdown(re.sub(r"^\s*-\s+", "", line))
+            if indent >= 2 and items:
+                items[-1]["children"].append(text)
             else:
-                last_renewed_cell = eligibility_renewal_time_short
-        
-        # Format Eligible Until cell with hover tooltip
-        if eligible_until_short:
-            eligible_until_cell = f'<span class="date-hover" data-full-date="{eligible_until_readable}">{eligible_until_short}</span>'
-        else:
-            eligible_until_cell = ""
-        
-        html_content += f"""                    <tr>
-                        <td><a href="{explorer_url}" target="_blank" class="address-link"><span class="address">{address}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a></td>
-                        <td><span class="{ens_class}">{ens_display}</span></td>
-                        <td>{status_badge}</td>
-                        <td class="streak-days">{indexer.get("continuous_streak_days", 0)}</td>
-                        <td>{last_renewed_cell}</td>
-                        <td>{eligible_until_cell}</td>
-                    </tr>
-"""
+                # The source writes each rule as "Label: detail". Splitting them
+                # lets the UI lead with the label and keep the block scannable
+                # instead of presenting three full sentences.
+                label, _, detail = text.partition(":")
+                if detail.strip():
+                    label = re.sub(r"\s*Requirements?$", "", label.strip())
+                    items.append({"label": label, "detail": detail.strip(), "children": []})
+                else:
+                    items.append({"label": "", "detail": text, "children": []})
 
-    html_content += f"""                </tbody>
-            </table>
-        </div>
-
-        <div class="stats">
-            <div class="total-count">Total Indexers: <span id="totalCount">{len(all_indexers)}</span></div>
-            <div class="filtered-count">Showing: <span id="filteredCount">{len(all_indexers)}</span></div>
-        </div>
-    </div>
-
-    <script>
-        // Multi-environment data
-        const environmentData = {_environment_data_to_json(environment_data)};
-
-        // Current selected environment
-        let currentEnvironment = 'testnet';
-
-        // Format timestamp for display
-        function formatTimestamp(isoString) {{
-            if (!isoString) return 'Unknown';
-            const date = new Date(isoString);
-            return date.toLocaleString('en-US', {{
-                year: 'numeric',
-                month: 'short',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'UTC'
-            }}) + ' UTC';
-        }}
-
-        // Switch environment function
-        function switchEnvironment(envKey) {{
-            const data = environmentData[envKey];
-            if (!data) {{
-                console.error('Environment not found:', envKey);
-                return;
-            }}
-
-            currentEnvironment = envKey;
-
-            // Update counters
-            const stats = data.stats || {{}};
-            const totalCount = document.getElementById('totalCount');
-            const eligibleCount = document.querySelector('.eligible-count');
-            const graceCount = document.querySelector('.grace-count');
-            const ineligibleCount = document.querySelector('.ineligible-count');
-
-            if (totalCount) totalCount.textContent = stats.total || 0;
-            if (eligibleCount) eligibleCount.textContent = stats.eligible || 0;
-            if (graceCount) graceCount.textContent = stats.grace || 0;
-            if (ineligibleCount) ineligibleCount.textContent = stats.ineligible || 0;
-
-            // Update contract info
-            const contractInfo = data.contract_info || {{}};
-            const contractAddressEl = document.getElementById('contract-address');
-            const deploymentInfoEl = document.getElementById('deployment-info');
-
-            if (contractAddressEl && contractInfo.address) {{
-                const shortAddress = contractInfo.address.substring(0, 10) + '...' + contractInfo.address.substring(38);
-                contractAddressEl.textContent = shortAddress;
-                contractAddressEl.href = `${{data.config.explorer_url}}/address/${{contractInfo.address}}`;
-            }}
-
-            if (deploymentInfoEl && contractInfo.deployment_block) {{
-                const deploymentTime = contractInfo.deployment_time ? formatTimestamp(contractInfo.deployment_time) : 'Unknown';
-                deploymentInfoEl.textContent = `Deployed: ${{deploymentTime}} (Block ${{contractInfo.deployment_block}})`;
-            }}
-
-            // Re-render table with new environment's data
-            if (data.indexers && data.indexers.length > 0) {{
-                renderIndexerTable(data.indexers, data.config?.explorer_url || 'https://sepolia.arbiscan.io');
-            }} else {{
-                // Show empty state
-                renderEmptyState(envKey);
-            }}
-
-            // Update originalData for search functionality
-            originalData = [];
-            if (data.indexers && data.indexers.length > 0) {{
-                // Sort indexers: eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified
-                const statusPriority = {{
-                    'eligible-active': 0,
-                    'eligible-grace': 1,
-                    'ineligible-expired': 2,
-                    'ineligible-unqualified': 3
-                }};
-
-                const sortedIndexers = [...data.indexers].sort((a, b) => {{
-                    const statusA = statusPriority[a.status] ?? 4;
-                    const statusB = statusPriority[b.status] ?? 4;
-                    if (statusA !== statusB) return statusA - statusB;
-                    const ensA = (a.ens_name || 'zzzzzzzzz').toLowerCase();
-                    const ensB = (b.ens_name || 'zzzzzzzzz').toLowerCase();
-                    return ensA.localeCompare(ensB);
-                }});
-
-                for (const indexer of sortedIndexers) {{
-                    const address = indexer.address || '';
-                    const ensName = indexer.ens_name || '';
-                    const status = indexer.status || 'ineligible-unqualified';
-                    const renewalTimeShort = indexer.eligibility_renewal_time_short || 'Never';
-                    const renewalTimeReadable = indexer.eligibility_renewal_time_readable || 'Never';
-                    const eligibleUntilShort = indexer.eligible_until_short || '';
-                    const eligibleUntilReadable = indexer.eligible_until_readable || '';
-                    const lastRenewedTx = indexer.last_renewed_on_tx || '';
-
-                    let statusBadge;
-                    if (status === 'eligible-active') {{
-                        statusBadge = '<span class="legend-badge good">Active</span>';
-                    }} else if (status === 'eligible-grace') {{
-                        statusBadge = '<span class="legend-badge grace">Eligible - Grace</span>';
-                    }} else if (status === 'ineligible-expired') {{
-                        statusBadge = '<span class="legend-badge ineligible">Expired</span>';
-                    }} else {{
-                        statusBadge = '<span class="legend-badge ineligible">Unqualified</span>';
-                    }}
-
-                    originalData.push([address, ensName, statusBadge, renewalTimeShort, renewalTimeReadable, eligibleUntilShort, eligibleUntilReadable, status, lastRenewedTx]);
-                }}
-            }}
-            currentData = [...originalData];
-
-            // Save preference to localStorage
-            localStorage.setItem('selectedEnvironment', envKey);
-        }}
-
-        // Render indexer table for specific environment
-        function renderIndexerTable(indexers, explorerUrl = 'https://sepolia.arbiscan.io') {{
-            const tableBody = document.getElementById('tableBody');
-            if (!tableBody) return;
-
-            tableBody.innerHTML = '';
-
-            // Sort indexers: eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified
-            const statusPriority = {{
-                'eligible-active': 0,
-                'eligible-grace': 1,
-                'ineligible-expired': 2,
-                'ineligible-unqualified': 3
-            }};
-
-            const sortedIndexers = [...indexers].sort((a, b) => {{
-                const statusA = statusPriority[a.status] ?? 4;
-                const statusB = statusPriority[b.status] ?? 4;
-                if (statusA !== statusB) return statusA - statusB;
-                const ensA = (a.ens_name || 'zzzzzzzzz').toLowerCase();
-                const ensB = (b.ens_name || 'zzzzzzzzz').toLowerCase();
-                return ensA.localeCompare(ensB);
-            }});
-
-            for (const indexer of sortedIndexers) {{
-                const address = indexer.address || '';
-                const ensName = indexer.ens_name || '';
-                const status = indexer.status || 'ineligible-unqualified';
-                const renewalTimeShort = indexer.eligibility_renewal_time_short || 'Never';
-                const renewalTimeReadable = indexer.eligibility_renewal_time_readable || 'Never';
-                const eligibleUntilShort = indexer.eligible_until_short || '';
-                const eligibleUntilReadable = indexer.eligible_until_readable || '';
-                const lastRenewedTx = indexer.last_renewed_on_tx || '';
-
-                let statusBadge;
-                if (status === 'eligible-active') {{
-                    statusBadge = '<span class="legend-badge good">Active</span>';
-                }} else if (status === 'eligible-grace') {{
-                    statusBadge = '<span class="legend-badge grace">Eligible - Grace</span>';
-                }} else if (status === 'ineligible-expired') {{
-                    statusBadge = '<span class="legend-badge ineligible">Expired</span>';
-                }} else {{
-                    statusBadge = '<span class="legend-badge ineligible">Unqualified</span>';
-                }}
-
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td><a href="${{explorerUrl}}/address/${{address}}" target="_blank">${{address.substring(0, 10)}}...${{address.substring(38)}}</a></td>
-                    <td>${{ensName || '-'}}</td>
-                    <td>${{statusBadge}}</td>
-                    <td title="${{renewalTimeReadable}}">${{renewalTimeShort}}</td>
-                    <td title="${{eligibleUntilReadable}}">${{eligibleUntilShort || '-'}}</td>
-                `;
-                tableBody.appendChild(row);
-            }}
-
-            // Update filtered count
-            const filteredCount = document.getElementById('filteredCount');
-            if (filteredCount) {{
-                filteredCount.textContent = indexers.length;
-            }}
-        }}
-
-        // Render empty state when environment has no data
-        function renderEmptyState(envKey) {{
-            const tableBody = document.getElementById('tableBody');
-            if (!tableBody) return;
-
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" style="text-align: center; padding: 40px; color: var(--lunar-gray);">
-                        <div style="font-size: 48px; margin-bottom: 10px;">📭</div>
-                        <div style="font-size: 18px; font-weight: 600;">No Data Available</div>
-                        <div style="font-size: 14px; margin-top: 5px;">
-                            ${{envKey === 'mainnet' ? 'Mainnet deployment coming soon.' : 'No indexers found for this environment.'}}
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }}
-
-        // Initialize environment on page load
-        // Populate environment select options dynamically
-        const envSelect = document.getElementById('environment-select');
-        if (envSelect) {{
-            // Clear existing options
-            envSelect.innerHTML = '';
-
-            // Populate with available environments
-            for (const [envKey, envData] of Object.entries(environmentData)) {{
-                const option = document.createElement('option');
-                option.value = envKey;
-                const contractAddress = envData.contract_info?.address || '';
-                const shortAddress = contractAddress ? `${{contractAddress.substring(0, 8)}}...${{contractAddress.substring(38)}}` : '';
-                const name = envData.config?.name || envKey;
-                option.textContent = shortAddress ? `${{name}} (${{shortAddress}})` : name;
-                envSelect.appendChild(option);
-            }}
-
-            // If no environments available, show message
-            if (Object.keys(environmentData).length === 0) {{
-                const option = document.createElement('option');
-                option.value = '';
-                option.textContent = 'No environments available';
-                option.disabled = true;
-                envSelect.appendChild(option);
-            }}
-        }}
-
-        document.addEventListener('DOMContentLoaded', () => {{
-            // Get saved environment or default to testnet
-            const saved = localStorage.getItem('selectedEnvironment') || 'testnet';
-
-            // Check if saved environment exists in data
-            if (environmentData[saved]) {{
-                document.getElementById('environment-select').value = saved;
-                switchEnvironment(saved);
-            }} else {{
-                // Fall back to first available environment
-                const firstEnv = Object.keys(environmentData)[0] || 'testnet';
-                document.getElementById('environment-select').value = firstEnv;
-                switchEnvironment(firstEnv);
-            }}
-        }});
-
-        // Table data
-        let originalData = [
-"""
-
-    # Sort indexers: first by status (eligible-active, eligible-grace, ineligible-expired, ineligible-unqualified), then by ENS name
-    def sort_key(indexer):
-        status = indexer.get("status", "ineligible-unqualified")
-        ens_name = indexer.get("ens_name", "")
-        # Status order: eligible-active (0), eligible-grace (1), ineligible-expired (2), ineligible-unqualified (3), then by ENS (empty ENS last)
-        status_priority = {"eligible-active": 0, "eligible-grace": 1, "ineligible-expired": 2, "ineligible-unqualified": 3}
-        return (status_priority.get(status, 4), ens_name.lower() if ens_name else "zzzzzzzzz")
-    
-    all_indexers_sorted = sorted(all_indexers, key=sort_key)
-
-    # Add JavaScript data from all indexers
-    for indexer in all_indexers_sorted:
-        address = indexer.get("address", "")
-        ens_name = indexer.get("ens_name", "")
-        status = indexer.get("status", "ineligible")
-        eligibility_renewal_time_short = indexer.get("eligibility_renewal_time_short", "Never")
-        eligibility_renewal_time_readable = indexer.get("eligibility_renewal_time_readable", "Never")
-        eligible_until_short = indexer.get("eligible_until_short", "")
-        eligible_until_readable = indexer.get("eligible_until_readable", "")
-        last_renewed_on_tx = indexer.get("last_renewed_on_tx", "")
-        
-        # Set status badge based on status
-        if status == "eligible-active":
-            status_badge = '<span class="legend-badge good">Active</span>'
-        elif status == "eligible-grace":
-            status_badge = '<span class="legend-badge grace">Eligible - Grace</span>'
-        elif status == "ineligible-expired":
-            status_badge = '<span class="legend-badge ineligible">Expired</span>'
-        else:  # ineligible-unqualified
-            status_badge = '<span class="legend-badge ineligible">Unqualified</span>'
-
-        # Get continuous streak days
-        streak_days = indexer.get("continuous_streak_days", 0)
-
-        html_content += f"""            ["{address}", "{ens_name}", '{status_badge}', "{eligibility_renewal_time_short}", "{eligibility_renewal_time_readable}", "{eligible_until_short}", "{eligible_until_readable}", "{status}", "{last_renewed_on_tx}", {streak_days}],
-"""
-
-    html_content += """        ];
-        
-        let currentData = [...originalData];
-        let sortColumn = -1;
-        let sortDirection = 'asc';
-        let activeFilter = null;
-        let currentSortMode = localStorage.getItem('sortMode') || 'default';
-
-        // Apply saved sort mode on page load
-        if (currentSortMode === 'streak') {
-            currentData.sort((a, b) => {
-                const statusPriority = {
-                    'eligible-active': 0,
-                    'eligible-grace': 1,
-                    'ineligible-expired': 2,
-                    'ineligible-unqualified': 3
-                };
-                const aStreak = a[9] ?? 0;
-                const bStreak = b[9] ?? 0;
-                if (aStreak !== bStreak) return bStreak - aStreak;
-                const aStatus = a[7] ?? 'ineligible-unqualified';
-                const bStatus = b[7] ?? 'ineligible-unqualified';
-                const aPriority = statusPriority[aStatus] ?? 4;
-                const bPriority = statusPriority[bStatus] ?? 4;
-                if (aPriority !== bPriority) return aPriority - bPriority;
-                const aENS = (a[1] || 'zzzzzzzzz').toLowerCase();
-                const bENS = (b[1] || 'zzzzzzzzz').toLowerCase();
-                return aENS.localeCompare(bENS);
-            });
+    if not items:
+        print("⚠ Eligibility criteria document had no parsable bullets; using built-in fallback.")
+        return {
+            "items": _ELIGIBILITY_CRITERIA_FALLBACK,
+            "source_url": ELIGIBILITY_CRITERIA_URL,
+            "is_fallback": True,
         }
 
-        // Search functionality
-        const searchInput = document.getElementById('searchInput');
-        const tableBody = document.getElementById('tableBody');
-        const totalCount = document.getElementById('totalCount');
-        const filteredCount = document.getElementById('filteredCount');
-        
-        // Apply both search and filter
-        function applyFilters() {
-            const searchTerm = searchInput.value.toLowerCase();
-            
-            currentData = originalData.filter(row => {
-                // Check search term
-                const matchesSearch = row[0].toLowerCase().includes(searchTerm) || 
-                                     row[1].toLowerCase().includes(searchTerm);
-                
-                // Check status filter (row[7] is the status string)
-                // Map filter buttons to actual status values
-                let matchesFilter = true;
-                if (activeFilter) {
-                    if (activeFilter === 'eligible') {
-                        matchesFilter = row[7] === 'eligible-active';
-                    } else if (activeFilter === 'grace') {
-                        matchesFilter = row[7] === 'eligible-grace';
-                    } else if (activeFilter === 'ineligible') {
-                        matchesFilter = row[7] === 'ineligible-expired' || row[7] === 'ineligible-unqualified';
-                    }
-                }
-                
-                return matchesSearch && matchesFilter;
-            });
-            
-            renderTable();
-            updateStats();
-        }
-        
-        searchInput.addEventListener('input', applyFilters);
-        
-        // Filter by status functionality
-        function filterByStatus(status) {
-            // Toggle filter
-            if (activeFilter === status) {
-                activeFilter = null;
-                // Remove active class from all buttons
-                document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            } else {
-                activeFilter = status;
-                // Remove active class from all buttons
-                document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                // Add active class to clicked button
-                document.querySelector(`.filter-btn.${status}`).classList.add('active');
-            }
+    print(f"✓ Fetched {len(items)} active eligibility criteria")
+    return {"items": items, "source_url": ELIGIBILITY_CRITERIA_URL, "is_fallback": False}
 
-            applyFilters();
-        }
 
-        // Reset filter
-        function resetFilter() {
-            activeFilter = null;
-            searchInput.value = '';
-            // Remove active class from all buttons
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            applyFilters();
-        }
-
-        // Set sort mode (default or streak)
-        function setSortMode(mode) {
-            currentSortMode = mode;
-            localStorage.setItem('sortMode', mode);
-
-            // Update button states
-            document.getElementById('sortDefaultBtn').classList.remove('active');
-            document.getElementById('sortStreakBtn').classList.remove('active');
-            if (mode === 'default') {
-                document.getElementById('sortDefaultBtn').classList.add('active');
-            } else {
-                document.getElementById('sortStreakBtn').classList.add('active');
-            }
-
-            // Re-render table with new sort mode
-            applySortMode();
-            renderTable();
-        }
-
-        // Apply sort mode to current data
-        function applySortMode() {
-            const statusPriority = {
-                'eligible-active': 0,
-                'eligible-grace': 1,
-                'ineligible-expired': 2,
-                'ineligible-unqualified': 3
-            };
-
-            if (currentSortMode === 'streak') {
-                // Sort by streak days (descending), then status priority, then ENS name
-                currentData.sort((a, b) => {
-                    // Streak is at index 9, status is at index 7
-                    const aStreak = a[9] ?? 0;
-                    const bStreak = b[9] ?? 0;
-
-                    // First sort by streak (descending)
-                    if (aStreak !== bStreak) return bStreak - aStreak;
-
-                    // If same streak, sort by status priority
-                    const aStatus = a[7] ?? 'ineligible-unqualified';
-                    const bStatus = b[7] ?? 'ineligible-unqualified';
-                    const aPriority = statusPriority[aStatus] ?? 4;
-                    const bPriority = statusPriority[bStatus] ?? 4;
-
-                    if (aPriority !== bPriority) return aPriority - bPriority;
-
-                    // If same status, sort by ENS name
-                    const aENS = (a[1] || 'zzzzzzzzz').toLowerCase();
-                    const bENS = (b[1] || 'zzzzzzzzz').toLowerCase();
-                    return aENS.localeCompare(bENS);
-                });
-            } else {
-                // Default mode: sort by status priority, then ENS name
-                currentData.sort((a, b) => {
-                    const aStatus = a[7] ?? 'ineligible-unqualified';
-                    const bStatus = b[7] ?? 'ineligible-unqualified';
-                    const aStatusPriority = statusPriority[aStatus] ?? 4;
-                    const bStatusPriority = statusPriority[bStatus] ?? 4;
-
-                    if (aStatusPriority !== bStatusPriority) return aStatusPriority - bStatusPriority;
-
-                    // Within same status group, sort by selected column
-                    let aVal = a[sortColumn];
-                    let bVal = b[sortColumn];
-
-                    // All columns are now text, so convert to lowercase for comparison
-                    aVal = aVal?.toLowerCase() ?? '';
-                    bVal = bVal?.toLowerCase() ?? '';
-
-                    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-                    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-                    return 0;
-                });
-            }
-
-            renderTable();
-        }
-
-        // Sorting functionality
-        function sortTable(column) {
-            if (sortColumn === column) {
-                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-            } else {
-                sortColumn = column;
-                sortDirection = 'asc';
-            }
-            
-            // Special handling when sorting by ENS name column (index 1)
-            if (column === 1) {
-                // Separate rows with ENS from rows without ENS
-                const withENS = [];
-                const withoutENS = [];
-                
-                currentData.forEach(row => {
-                    const ens = row[1].toLowerCase();
-                    if (ens === '' || ens === 'no ens') {
-                        withoutENS.push(row);
-                    } else {
-                        withENS.push(row);
-                    }
-                });
-                
-                // Sort only the rows with ENS
-                withENS.sort((a, b) => {
-                    const aENS = a[1].toLowerCase();
-                    const bENS = b[1].toLowerCase();
-                    
-                    if (aENS < bENS) return sortDirection === 'asc' ? -1 : 1;
-                    if (aENS > bENS) return sortDirection === 'asc' ? 1 : -1;
-                    return 0;
-                });
-                
-                // Combine: sorted ENS rows + unsorted no-ENS rows at the end
-                if (sortDirection === 'asc') {
-                    currentData = [...withENS, ...withoutENS];
-                } else {
-                    // In descending order, put no-ENS at beginning
-                    currentData = [...withoutENS, ...withENS];
-                }
-                
-                renderTable();
-                updateSortHeaders();
-                return;
-            }
-            
-            // For all other columns, use regular sort
-            currentData.sort((a, b) => {
-                // Special handling when sorting by status column (index 2)
-                if (column === 2) {
-                    // Use the plain text status (row[7]) for sorting
-                    const aStatus = a[7].toLowerCase();
-                    const bStatus = b[7].toLowerCase();
-                    
-                    if (aStatus < bStatus) return sortDirection === 'asc' ? -1 : 1;
-                    if (aStatus > bStatus) return sortDirection === 'asc' ? 1 : -1;
-                    return 0;
-                }
-                
-                // For other columns, always maintain status priority first
-                // Status order: eligible-active (0), eligible-grace (1), ineligible-expired (2), ineligible-unqualified (3)
-                const getStatusPriority = (statusString) => {
-                    if (statusString === 'eligible-active') return 0;
-                    if (statusString === 'eligible-grace') return 1;
-                    if (statusString === 'ineligible-expired') return 2;
-                    if (statusString === 'ineligible-unqualified') return 3;
-                    return 4;
-                };
-                
-                const aStatusPriority = getStatusPriority(a[7]);
-                const bStatusPriority = getStatusPriority(b[7]);
-                
-                // If status priority differs, sort by priority
-                if (aStatusPriority !== bStatusPriority) {
-                    return aStatusPriority - bStatusPriority;
-                }
-                
-                // Within same status group, sort by the selected column
-                let aVal = a[column];
-                let bVal = b[column];
-                
-                // All columns are now text, so convert to lowercase for comparison
-                aVal = aVal.toLowerCase();
-                bVal = bVal.toLowerCase();
-                
-                if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-                if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-                return 0;
-            });
-            
-            renderTable();
-            updateSortHeaders();
-        }
-        
-        function renderTable() {
-            tableBody.innerHTML = '';
-            currentData.forEach((row, index) => {
-                const [address, ensName, status, lastRenewedShort, lastRenewedFull, eligibleUntilShort, eligibleUntilFull, statusString, lastRenewedOnTx, streakDays] = row;
-                const ensDisplay = ensName || 'No ENS';
-                const ensClass = ensName ? 'ens-name' : 'empty-ens';
-                const explorerUrl = `https://thegraph.com/explorer/profile/${address}?view=Indexing&chain=arbitrum-one`;
-                
-                // Format Last Renewed cell with transaction link (no tooltip)
-                let lastRenewedCell;
-                if (lastRenewedShort === 'Never') {
-                    lastRenewedCell = lastRenewedShort;
-                } else {
-                    // If we have a transaction hash, make the date a link with external icon
-                    if (lastRenewedOnTx) {
-                        lastRenewedCell = `<a href="https://sepolia.arbiscan.io/tx/${lastRenewedOnTx}" target="_blank" class="transaction-hash">${lastRenewedShort}<svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a>`;
-                } else {
-                    lastRenewedCell = lastRenewedShort;
-                    }
-                }
-                
-                // Format Eligible Until cell with hover tooltip
-                let eligibleUntilCell = '';
-                if (eligibleUntilShort) {
-                    eligibleUntilCell = `<span class="date-hover" data-full-date="${eligibleUntilFull}">${eligibleUntilShort}</span>`;
-                }
-                
-                const rowHTML = `
-                    <tr>
-                        <td><a href="${explorerUrl}" target="_blank" class="address-link"><span class="address">${address}</span><svg class="external-link-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2.5a.5.5 0 0 0-.5-.5h-6a.5.5 0 0 0 0 1h4.793L8.146 7.146a.5.5 0 0 0 .708.708L13 3.707V8.5a.5.5 0 0 0 1 0v-6z"/><path d="M4.5 4a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9a.5.5 0 0 0-1 0v3H5V5h3a.5.5 0 0 0 0-1h-3.5z"/></svg></a></td>
-                        <td><span class="${ensClass}">${ensDisplay}</span></td>
-                        <td>${status}</td>
-                        <td class="streak-days">${streakDays ?? 0}</td>
-                        <td>${lastRenewedCell}</td>
-                        <td>${eligibleUntilCell}</td>
-                    </tr>
-                `;
-                tableBody.innerHTML += rowHTML;
-            });
-        }
-        
-        function updateSortHeaders() {
-            const headers = document.querySelectorAll('th.sortable');
-            headers.forEach((header, index) => {
-                header.className = 'sortable';
-                if (index === sortColumn) {
-                    header.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
-                }
-            });
-        }
-        
-        function updateStats() {
-            totalCount.textContent = originalData.length;
-            filteredCount.textContent = currentData.length;
-        }
-        
-        // Add click handlers to sortable headers
-        document.querySelectorAll('th.sortable').forEach((header, index) => {
-            header.addEventListener('click', () => sortTable(index));
-        });
-
-        // Add event listeners for sort buttons
-        document.getElementById('sortDefaultBtn').addEventListener('click', () => setSortMode('default'));
-        document.getElementById('sortStreakBtn').addEventListener('click', () => setSortMode('streak'));
-
-        // Add event listeners for filter buttons
-        document.getElementById('filterEligibleBtn').addEventListener('click', () => filterByStatus('eligible'));
-        document.getElementById('filterGraceBtn').addEventListener('click', () => filterByStatus('grace'));
-        document.getElementById('filterIneligibleBtn').addEventListener('click', () => filterByStatus('ineligible'));
-        document.getElementById('resetFilterBtn').addEventListener('click', resetFilter);
-
-        // Initialize
-        renderTable();
-        updateStats();
-    </script>
-    </div>
-"""
-
-    # Add legend section before footer (commented out - using filter section instead)
-    # html_content += """
-    # <div class="legend">
-    #     <div class="legend-title">Status Legend</div>
-    #     <div class="legend-items">
-    #         <div class="legend-item">
-    #             <span class="legend-badge good">eligible</span>
-    #             <span class="legend-description">Indexer is eligible for rewards</span>
-    #         </div>
-    #         <div class="legend-item">
-    #             <span class="legend-badge grace">grace</span>
-    #             <span class="legend-description">Grace period active (coming soon)</span>
-    #         </div>
-    #         <div class="legend-item">
-    #             <span class="legend-badge ineligible">ineligible</span>
-    #             <span class="legend-description">Indexer is not eligible for rewards</span>
-    #         </div>
-    #     </div>
-    # </div>
-    # """
-
-    # Add footer with version, GitHub link, and Telegram bot
-    html_content += f"""
-    <div class="footer">
-        <div class="footer-content">
-            <div class="footer-top">
-                <div class="footer-left">
-                    This dashboard is based on the <a href="https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734" target="_blank">GIP-0079: Indexer Rewards Eligibility Oracle</a>
-                </div>
-                <div class="footer-right">
-                    <span class="version">v{VERSION}</span>
-                    <span class="footer-separator">-</span>
-                    <svg class="github-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><a href="https://github.com/graphprotocol/rewards-eligibility-oracle-dashboard" target="_blank">View repo on GitHub</a>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Contract Information Section - Commented out as requested -->
+def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
     """
-    
-    # Contract Information Section - Commented out as requested
-    # html_content += f"""
-    # <div class="contract-info">
-    #     <div class="contract-info-header" onclick="toggleContractInfo()">
-    #         <h3>Contract Information (FOR DEBUG ONLY - will be removed in the future)</h3>
-    #         <svg class="contract-info-arrow" id="contractInfoArrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    #             <polyline points="6 9 12 15 18 9"></polyline>
-    #         </svg>
-    #     </div>
-    #     <div class="contract-info-content" id="contractInfoContent">
-    #         <div class="info-item">
-    #             <span class="info-label">Sepolia Contract on Arbitrum:</span>
-    #             <span class="info-value"><a href="https://sepolia.arbiscan.io/address/{contract_address}" target="_blank" class="transaction-hash">{contract_address}</a></span>
-    #         </div>"""
-    # 
-    # # Add oracle update time
-    # if oracle_update_time:
-    #     try:
-    #         oracle_readable_time = datetime.fromtimestamp(oracle_update_time, tz=timezone.utc).strftime("%d %b %Y at %H:%M:%S (UTC)")
-    #         html_content += f"""
-    #     <div class="info-item">
-    #         <span class="info-label">Last Oracle Update Time:</span>
-    #         <span class="info-value">{oracle_readable_time}</span>
-    #     </div>"""
-    #     except Exception as e:
-    #         print(f"Error formatting oracle update time: {e}")
-    #         html_content += """
-    #     <div class="info-item">
-    #         <span class="info-label">Last Oracle Update Time:</span>
-    #         <span class="info-value"><span class="error-message">Error formatting oracle update time</span></span>
-    #     </div>"""
-    # else:
-    #     html_content += """
-    #     <div class="info-item">
-    #         <span class="info-label">Last Oracle Update Time:</span>
-    #         <span class="info-value"><span class="error-message">Unable to fetch oracle update time</span></span>
-    #     </div>"""
-    # 
-    # # Add last transaction data (without transaction time)
-    # if last_transaction:
-    #     tx_hash = last_transaction.get('hash', 'N/A')
-    #     block_number = last_transaction.get('blockNumber', 'N/A')
-    #     
-    #     html_content += f"""
-    #     <div class="info-item">
-    #         <span class="info-label">Last Transaction ID:</span>
-    #         <span class="info-value"><a href="https://sepolia.arbiscan.io/tx/{tx_hash}" target="_blank" class="transaction-hash">{tx_hash}</a></span>
-    #     </div>
-    #     <div class="info-item">
-    #         <span class="info-label">Block Number:</span>
-    #         <span class="info-value">{block_number}</span>
-    #     </div>"""
-    # else:
-    #     html_content += """
-    #     <div class="info-item">
-    #         <span class="info-label">Last Transaction ID:</span>
-    #         <span class="info-value"><span class="error-message">Unable to fetch transaction data</span></span>
-    #     </div>"""
-    # 
-    # # Add eligibility period
-    # if eligibility_period:
-    #     # Convert seconds to days
-    #     days = eligibility_period / 86400
-    #     html_content += f"""
-    #     <div class="info-item">
-    #         <span class="info-label">Eligibility Period:</span>
-    #         <span class="info-value">{eligibility_period} seconds ({days:.1f} days)</span>
-    #     </div>"""
-    # else:
-    #     html_content += """
-    #     <div class="info-item">
-    #         <span class="info-label">Eligibility Period:</span>
-    #         <span class="info-value"><span class="error-message">Unable to fetch eligibility period</span></span>
-    #     </div>"""
-    # 
-    # html_content += """
-    #     </div>
-    # </div>
-    # 
-    # <script>
-    #     function toggleContractInfo() {
-    #         const content = document.getElementById('contractInfoContent');
-    #         const arrow = document.getElementById('contractInfoArrow');
-    #         content.classList.toggle('expanded');
-    #         arrow.classList.toggle('expanded');
-    #     }
-    # </script>
-    # """
-    
-    html_content += """
-</body>
-</html>"""
+    Write the single JSON file that is the contract between the two halves of
+    this project: Python fetches on-chain data, the React frontend renders it.
 
-    return html_content
+    Everything the UI needs lives here, so the frontend never has to reach into
+    the working files at the repository root. Written atomically, because the
+    renderer or a deploy may read it at any moment.
+    """
+    payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "eligibility_criteria": fetch_eligibility_criteria(),
+        "environments": [],
+    }
 
+    for env_key, env_data in environment_data.items():
+        config = env_data.get("config", {})
+        contract_info = env_data.get("contract_info", {})
+
+        # eligibility_period and the oracle update time are written into the
+        # per-environment working file by checkEligibility(), so read them back
+        # from there rather than duplicating the derivation here.
+        env_meta = {}
+        try:
+            with open(f"active_indexers_{env_key}.json", encoding="utf-8") as handle:
+                env_meta = json.load(handle).get("metadata", {})
+        except (OSError, ValueError):
+            pass
+
+        payload["environments"].append({
+            "id": env_key,
+            "label": config.get("name", env_key),
+            "network_id": str(config.get("network_id", "")),
+            "contract_address": contract_info.get("address"),
+            "deployment_block": contract_info.get("deployment_block"),
+            "deployment_time": contract_info.get("deployment_time"),
+            # eligibility_period is the oracle's renewal window in seconds
+            # (1209600 = 14 days). The UI needs it to compute the grace
+            # countdown, which the previous dashboard never displayed.
+            "eligibility_period": env_meta.get("eligibility_period"),
+            "last_oracle_update_time": env_meta.get("last_oracle_update_time"),
+            "stats": env_data.get("stats", {}),
+            "indexers": env_data.get("indexers", []),
+        })
+
+    data_path = os.path.join(output_dir, "data.json")
+    _write_atomic(data_path, json.dumps(payload, indent=2))
+
+    total = sum(len(e["indexers"]) for e in payload["environments"])
+    print(f"Wrote {data_path} — {len(payload['environments'])} networks, {total} indexers")
+    return data_path
+
+
+def copy_gds_assets(output_dir: str) -> None:
+    """
+    Place the compiled GDS stylesheet and Euclid Circular fonts next to
+    index.html so Caddy serves them. In Docker these come from the frontend
+    build stage at /app/static/gds; locally, scripts/build_frontend.sh writes
+    them straight into the output dir.
+    """
+    gds_src = '/app/static/gds'
+    if os.path.isdir(gds_src):
+        css_src = os.path.join(gds_src, 'gds.css')
+        fonts_src = os.path.join(gds_src, 'fonts')
+        if os.path.isfile(css_src):
+            shutil.copy2(css_src, os.path.join(output_dir, 'gds.css'))
+            print(f"Copied GDS stylesheet to {output_dir}/gds.css")
+        if os.path.isdir(fonts_src):
+            shutil.copytree(fonts_src, os.path.join(output_dir, 'fonts'), dirs_exist_ok=True)
+            print(f"Copied GDS fonts to {output_dir}/fonts/")
+    elif not os.path.isfile(os.path.join(output_dir, 'gds.css')):
+        print("Info: compiled GDS assets not found. Run scripts/build_frontend.sh "
+              "for local development, or build via Docker.")
+
+
+def render_dashboard(output_dir: str) -> bool:
+    """
+    Render output/index.html from output/data.json via the prerenderer.
+
+    The renderer is a self-contained bundle produced at image-build time, so no
+    node_modules are needed here — only a node binary.
+
+    A failed render is deliberately non-fatal: the previously rendered
+    index.html keeps being served rather than being replaced by a blank or
+    half-written page. Because the page displays its own "generated at"
+    timestamp, a stalled render ages visibly instead of failing silently.
+    """
+    renderer = os.getenv('REO_RENDERER', os.path.join('frontend', 'scripts', 'prerender.mjs'))
+    if not os.path.isfile(renderer):
+        print(f"⚠ Renderer not found at {renderer}; leaving existing index.html untouched.")
+        return False
+
+    try:
+        result = subprocess.run(
+            ['node', renderer],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, 'REO_OUTPUT_DIR': output_dir},
+        )
+    except FileNotFoundError:
+        print("⚠ `node` is not available; leaving existing index.html untouched.")
+        return False
+    except subprocess.TimeoutExpired:
+        print("⚠ Renderer timed out after 120s; leaving existing index.html untouched.")
+        return False
+
+    if result.returncode != 0:
+        print(f"⚠ Renderer failed (exit {result.returncode}); "
+              f"leaving existing index.html untouched.")
+        if result.stderr:
+            print(result.stderr.strip())
+        return False
+
+    if result.stdout:
+        print(result.stdout.strip())
+    return True
+
+
+def _write_atomic(path: str, content: str) -> None:
+    """
+    Write via a temporary file in the same directory, then os.replace().
+
+    os.replace() is atomic on POSIX, so a reader (Caddy, the renderer) never
+    observes a partially written file.
+    """
+    directory = os.path.dirname(path) or '.'
+    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            handle.write(content)
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 def main():
     """Main function to generate the multi-environment dashboard."""
@@ -3962,25 +2079,12 @@ def main():
         first_env_rpc = None
         first_env_chainid = "421614"
 
-    html_content = generate_html_dashboard(
-        [],  # Empty list - function reads from file
-        contract_address=contract_address,
-        api_key=api_key,
-        rpc_manager=first_env_rpc,
-        environment_data=environment_data,
-        chainid=first_env_chainid
-    )
-
-    # Write to index.html (in output directory if in production environment)
     output_dir = os.getenv('REO_OUTPUT_DIR', 'output')
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, 'index.html')
 
-    with open(output_path, 'w', encoding='utf-8') as file:
-        file.write(html_content)
-
-    print(f"Dashboard generated successfully at {output_path}!")
-    print(f"Open '{output_path}' in your browser to view the dashboard.")
+    write_dashboard_data(environment_data, output_dir)
+    copy_gds_assets(output_dir)
+    render_dashboard(output_dir)
 
     # Log execution time
     end_time = datetime.now(timezone.utc)

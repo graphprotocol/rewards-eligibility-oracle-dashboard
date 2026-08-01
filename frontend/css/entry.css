@@ -1,0 +1,21 @@
+/*
+ * The Graph Design System entry point.
+ *
+ * Importing `@graphprotocol/gds-react` resolves (via its "style" export
+ * condition) to the package's own Tailwind entry, which already pulls in
+ * gds-css tokens, the GDS Tailwind plugin, and `@source` directives for every
+ * GDS component. We only need to register our own sources on top.
+ */
+@import '@graphprotocol/gds-react';
+
+@source '../src';
+
+/*
+ * GDS's ThemeSwitcher renders Base UI radios that set outline-width: 0, leaving
+ * the only keyboard-invisible control on the page. Restore the same ring every
+ * other control gets.
+ */
+[role='radio']:focus-visible {
+  outline: 1px solid var(--color-brand-500);
+  outline-offset: 1px;
+}

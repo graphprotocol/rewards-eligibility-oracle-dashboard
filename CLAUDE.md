@@ -175,12 +175,19 @@ The dashboard supports multiple contract deployments simultaneously:
 
 ## Key Files
 
-- **`generate_dashboard.py`** (3400+ lines) - Main script containing all logic
+- **`generate_dashboard.py`** (~2000 lines) - Data layer: fetches on-chain data, writes JSON
   - `retrieveActiveIndexers()` - Fetches from subgraph with ENS resolution
   - `checkEligibility()` - Three-pass contract interaction
   - `updateStatusChangeDates()` - Compares runs to detect changes
   - `logStatusChanges()` - Appends to cumulative activity log
-  - `generate_html_dashboard()` - Creates self-contained HTML with embedded CSS/JS
+  - `write_dashboard_data()` - Writes `output/data.json`, the contract with the frontend
+  - `render_dashboard()` - Shells out to the Node prerenderer (non-fatal on failure)
+
+- **`frontend/`** - Presentation layer: React + The Graph Design System, prerendered
+  - `src/App.jsx` - The page. Two surfaces: indexer self-lookup, then the oracle roster
+  - `src/lib/status.js` - Eligibility domain logic (status → GDS variant, grace countdown)
+  - `src/lib/data.js` - Reads `output/data.json`; the frontend reads nothing else
+  - `scripts/prerender.mjs` - Renders `output/index.html` atomically
 
 - **`scheduler.py`** - Runs continuously, regenerates dashboard every 5 minutes
   - Reads from `.env` for configuration
@@ -228,11 +235,22 @@ The dashboard supports multiple contract deployments simultaneously:
 2. Test by running script and checking `active_indexers.json` status field
 3. Verify HTML dashboard displays correct badges
 
+### Architecture: two halves, one contract
+
+**Python fetches data and writes `output/data.json`. React renders that JSON to
+`output/index.html`.** Neither half reaches across the line: the frontend reads
+only `data.json`, and Python emits no markup. Freshness comes from regeneration
+(~5 min), not from client-side fetching — nothing is fetched in the browser.
+
+The renderer is a self-contained bundle built by `vite build`, so the runtime
+image needs a `node` binary but **no `node_modules`**.
+
 ### Adding Dashboard Features
-1. HTML generation is in `generate_html_dashboard()` function
-2. CSS is embedded directly in `<style>` tags (no separate CSS file)
-3. JavaScript for interactivity is embedded in `<script>` tags
-4. For multi-environment support, add to `environments` dict before HTML generation
+1. UI lives in `frontend/src/App.jsx`; build with `bash scripts/build_frontend.sh`
+2. Use GDS components from `@graphprotocol/gds-react` — do not hand-roll equivalents
+3. Style with GDS Tailwind utilities/tokens; there is no hand-written CSS file
+4. If the UI needs a new field, add it in `write_dashboard_data()` first — `data.json`
+   is the only channel between the halves
 
 ### Updating Subgraph Queries
 1. Query in `retrieveActiveIndexers()` function
