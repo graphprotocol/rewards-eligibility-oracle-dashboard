@@ -25,7 +25,10 @@ export default defineConfig({
         emptyOutDir: true,
       }
     : {
-        outDir: '../output',
+        // The Docker build redirects this into the build stage's `out/` dir,
+        // which ships to the runtime image and is copied into the output dir
+        // alongside gds.css and the fonts.
+        outDir: process.env.REO_CLIENT_OUT_DIR ?? '../output',
         emptyOutDir: false, // index.html and gds.css live here too
         assetsInlineLimit: Number.MAX_SAFE_INTEGER,
         minify: !process.env.DEV,

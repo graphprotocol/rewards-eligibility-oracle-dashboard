@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "retrieved": "2026-07-29 20:21:14 UTC",
-    "total_count": 98,
+    "retrieved": "2026-08-03 18:42:45 UTC",
+    "total_count": 97,
     "last_oracle_update_time": 0,
     "eligibility_period": 1209600,
     "transaction_hash": "0x36f3b72b4a49283eacdb39ffbe9b74abeb9f1dff598ec85e5d1c012151aea00e",
@@ -109,7 +109,7 @@
     {
       "address": "0x0d6c95e9f6a2efe62e78ee0b73f976737942d9d3",
       "ens_name": "",
-      "is_eligible": false,
+      "is_eligible": true,
       "status": "ineligible-unqualified",
       "eligible_until": "",
       "eligible_until_readable": "",
@@ -207,20 +207,6 @@
     {
       "address": "0x2121bc6437100fc21d19a9eea30898419e020afa",
       "ens_name": "pillar.p2p-org.eth",
-      "is_eligible": true,
-      "status": "ineligible-unqualified",
-      "eligible_until": "",
-      "eligible_until_readable": "",
-      "eligibility_renewal_time": 0,
-      "last_status_change_date": "24/Jul/2026",
-      "last_renewed_on_tx": "0xa15e25c16c54400ae3b56e10872a342a8b00a4970779e9f9210fc4063d3b39cb",
-      "eligibility_renewal_time_readable": "Never",
-      "eligibility_renewal_time_short": "Never",
-      "eligible_until_short": ""
-    },
-    {
-      "address": "0x269ebeee083ce6f70486a67dc8036a889bf322a9",
-      "ens_name": "thomasblock.eth",
       "is_eligible": true,
       "status": "ineligible-unqualified",
       "eligible_until": "",
@@ -949,7 +935,7 @@
     {
       "address": "0xb43b2cccceada5292732a8c58ae134adefce09bb",
       "ens_name": "lodestar-indexer.eth",
-      "is_eligible": false,
+      "is_eligible": true,
       "status": "ineligible-unqualified",
       "eligible_until": "",
       "eligible_until_readable": "",
