@@ -165,6 +165,46 @@ def parse_deployment_block_from_registry(registry: dict, network_id: str) -> Opt
     return None
 
 
+def _resolve_contract_address(
+    registry: dict,
+    network_id: str,
+    env_var: str,
+    fallback: str = "",
+) -> str:
+    """
+    Resolve a network's oracle address using one rule for every network:
+
+        1. The ``env_var`` override from .env — always wins.
+        2. The addresses.json registry entry for ``network_id``.
+        3. ``fallback``, if given.
+
+    The override comes first because the registry cannot always be trusted to
+    be unambiguous: the Sepolia (421614) block holds several oracle variants
+    (RewardsEligibilityOracleA/B/Mock) with no canonical
+    "RewardsEligibilityOracle" key, so _find_reo_entry's prefix match depends on
+    JSON key order. Pinning an address is the only way to be certain which
+    oracle is read, and that guarantee is worth having on mainnet too.
+
+    An override that disagrees with the registry is legitimate (a migration, or
+    deliberately watching a non-default deployment) but is worth surfacing,
+    since a stale .env would otherwise silently redirect the dashboard to the
+    wrong contract.
+    """
+    registry_address = parse_contract_address_from_registry(registry, network_id)
+    override = os.getenv(env_var)
+
+    if override:
+        if registry_address and override.lower() != registry_address.lower():
+            print(
+                f"⚠ {env_var}={override} overrides the {network_id} registry "
+                f"address {registry_address}. Using the override — unset "
+                f"{env_var} to follow the registry."
+            )
+        return override
+
+    return registry_address or fallback
+
+
 def get_environments_config() -> dict:
     """
     Build the ENVIRONMENTS config dict with dynamic contract addresses and
@@ -177,33 +217,23 @@ def get_environments_config() -> dict:
         1. RPC_ENDPOINT_MAINNET / RPC_ENDPOINT_TESTNET (network-specific)
         2. Falls back to generic RPC_ENDPOINT if no network-specific endpoint is set
 
+    Contract address resolution is identical for both environments — see
+    _resolve_contract_address.
+
     Returns:
         dict: ENVIRONMENTS configuration with per-environment rpc_manager
     """
     # Fetch from GitHub JSON
     addresses = fetch_contract_addresses()
 
-    # Get Sepolia address from JSON registry
-    sepolia_address = parse_contract_address_from_registry(addresses, "421614")
-    sepolia_deployment_block = parse_deployment_block_from_registry(addresses, "421614")
-
-    # Resolve the testnet contract address. The Sepolia (421614) registry block
-    # holds several oracle variants (RewardsEligibilityOracleA/B/Mock) with no
-    # canonical "RewardsEligibilityOracle" key, so the registry auto-pick is
-    # ambiguous. TESTNET_CONTRACT_ADDRESS lets you pin an explicit address
-    # (e.g. the RewardsEligibilityOracleMock deployment) and takes precedence.
-    testnet_address = (
-        os.getenv("TESTNET_CONTRACT_ADDRESS")
-        or sepolia_address
-        or "0x62c2305739cc75f19a3a6d52387ceb3690d99a99"
+    mainnet_address = _resolve_contract_address(
+        addresses, "42161", "MAINNET_CONTRACT_ADDRESS"
     )
-
-    # Get mainnet address from registry (handles the "RewardsEligibilityOracleA"
-    # key), falling back to .env if the registry doesn't have it.
-    mainnet_address = parse_contract_address_from_registry(addresses, "42161")
-    if not mainnet_address:
-        # Try to get from environment variable
-        mainnet_address = os.getenv("MAINNET_CONTRACT_ADDRESS", "")
+    testnet_address = _resolve_contract_address(
+        addresses, "421614", "TESTNET_CONTRACT_ADDRESS",
+        fallback="0x62c2305739cc75f19a3a6d52387ceb3690d99a99",
+    )
+    sepolia_deployment_block = parse_deployment_block_from_registry(addresses, "421614")
 
     environments = {
         "mainnet": {
@@ -1768,15 +1798,25 @@ def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
 
 def copy_gds_assets(output_dir: str) -> None:
     """
-    Place the compiled GDS stylesheet and Euclid Circular fonts next to
-    index.html so Caddy serves them. In Docker these come from the frontend
-    build stage at /app/static/gds; locally, scripts/build_frontend.sh writes
-    them straight into the output dir.
+    Place the client bundle, compiled GDS stylesheet and Euclid Circular fonts
+    next to index.html so Caddy serves them. In Docker these come from the
+    frontend build stage at /app/static/gds; locally,
+    scripts/build_frontend.sh writes them straight into the output dir.
+
+    app.js is what hydrates the prerendered page — without it the dashboard
+    renders correctly but no control responds to input.
     """
     gds_src = '/app/static/gds'
     if os.path.isdir(gds_src):
         css_src = os.path.join(gds_src, 'gds.css')
         fonts_src = os.path.join(gds_src, 'fonts')
+        app_src = os.path.join(gds_src, 'app.js')
+        if os.path.isfile(app_src):
+            shutil.copy2(app_src, os.path.join(output_dir, 'app.js'))
+            print(f"Copied client bundle to {output_dir}/app.js")
+        else:
+            print("⚠ app.js missing from the frontend build — the page will not "
+                  "be interactive.")
         if os.path.isfile(css_src):
             shutil.copy2(css_src, os.path.join(output_dir, 'gds.css'))
             print(f"Copied GDS stylesheet to {output_dir}/gds.css")
@@ -1850,8 +1890,18 @@ def _write_atomic(path: str, content: str) -> None:
             os.unlink(tmp_path)
         raise
 
-def main():
-    """Main function to generate the multi-environment dashboard."""
+def main() -> bool:
+    """
+    Main function to generate the multi-environment dashboard.
+
+    Returns:
+        True if the dashboard was generated and rendered, False if the run
+        bailed out early or left index.html stale.
+
+    This is the scheduler's only signal about whether a run worked (see
+    scheduler.run_task), so every exit path has to report honestly. Note that
+    the __main__ entry point does not yet turn this into a process exit code.
+    """
     start_time = datetime.now(timezone.utc)
     print("=" * 70)
     print(f"Script started at {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -1898,7 +1948,7 @@ def main():
             valid_environments = {'testnet': ENVIRONMENTS['testnet']}
         else:
             print("❌ Error: No contract addresses available and no CONTRACT_ADDRESS fallback")
-            return
+            return False
 
     # Validate that each environment has RPC endpoints
     for env_key, env_config in list(valid_environments.items()):
@@ -1911,7 +1961,7 @@ def main():
     if not valid_environments:
         print("❌ Error: No environments have RPC endpoints configured")
         print("Please set RPC_ENDPOINT_MAINNET and/or RPC_ENDPOINT_TESTNET in your .env file")
-        return
+        return False
 
     print(f"✓ Processing {len(valid_environments)} environment(s): {', '.join(valid_environments.keys())}")
     print()
@@ -2084,7 +2134,10 @@ def main():
 
     write_dashboard_data(environment_data, output_dir)
     copy_gds_assets(output_dir)
-    render_dashboard(output_dir)
+    # A failed render leaves the previous index.html in place, so the data is
+    # fresh but what visitors see is not. That is a failed run as far as the
+    # caller is concerned, even though serving stale HTML beats serving none.
+    rendered = render_dashboard(output_dir)
 
     # Log execution time
     end_time = datetime.now(timezone.utc)
@@ -2094,6 +2147,8 @@ def main():
     print(f"Script completed at {end_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print(f"Total execution time: {duration:.2f} seconds ({duration/60:.2f} minutes)")
     print("=" * 70)
+
+    return rendered
 
 
 if __name__ == "__main__":

@@ -13,14 +13,25 @@ import logging
 from datetime import datetime
 import os
 
-# Configure logging
+# Log beside the generated dashboard, honouring the same REO_OUTPUT_DIR the rest
+# of the code uses. This used to be hardcoded to the container path
+# /app/output/scheduler.log, which made the module impossible to import outside
+# Docker: FileHandler opens the file at import time, so a local run died before
+# main() was ever reached.
+_output_dir = os.getenv('REO_OUTPUT_DIR', 'output')
+_handlers = [logging.StreamHandler(sys.stdout)]
+try:
+    os.makedirs(_output_dir, exist_ok=True)
+    _handlers.append(logging.FileHandler(os.path.join(_output_dir, 'scheduler.log')))
+except OSError as e:
+    # An unwritable output dir must not stop the scheduler — stdout is what
+    # `docker compose logs` reads, and it is the log that actually matters.
+    print(f"⚠ Could not open scheduler.log in {_output_dir}: {e}. Logging to stdout only.")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/app/output/scheduler.log')
-    ]
+    handlers=_handlers,
 )
 logger = logging.getLogger('REO-Scheduler')
 

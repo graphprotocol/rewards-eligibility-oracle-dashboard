@@ -5,6 +5,7 @@
 # produce everything generate_dashboard.py needs to render:
 #
 #   frontend/dist-ssr/entry-server.js  the self-contained SSR bundle
+#   output/app.js                      the client bundle that hydrates the page
 #   output/gds.css                     compiled GDS tokens + utilities
 #   output/fonts/                      Euclid Circular
 #
@@ -28,6 +29,12 @@ npm install --no-audit --no-fund
 echo "==> Building SSR bundle"
 npm run build:ssr
 
+# prerender.mjs always emits <script src="app.js">. Without this step that 404s,
+# so the page renders but never hydrates and nothing interactive responds —
+# lookup box, network toggle, status filter, column sorting.
+echo "==> Building client bundle"
+npm run build:client
+
 echo "==> Compiling GDS stylesheet"
 mkdir -p "$OUT_DIR"
 npx tailwindcss -i css/entry.css -o "${OUT_DIR}/gds.css" --minify
@@ -39,6 +46,7 @@ cp -r node_modules/@graphprotocol/gds-css/styles/fonts "${OUT_DIR}/fonts"
 echo
 echo "Frontend built:"
 echo "  ${FRONTEND_DIR}/dist-ssr/entry-server.js"
+echo "  ${OUT_DIR}/app.js"
 echo "  ${OUT_DIR}/gds.css"
 echo "  ${OUT_DIR}/fonts/"
 echo

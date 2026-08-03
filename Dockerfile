@@ -2,10 +2,12 @@
 # Multi-stage build for efficient image
 
 # ---- Stage 1: build the frontend ----
-# Produces two things:
+# Produces three things:
 #   1. dist-ssr/entry-server.js — a self-contained SSR bundle (vite bundles the
 #      GDS React components in, so the runtime needs no node_modules at all).
-#   2. gds.css + Euclid Circular fonts — compiled from the GDS Tailwind preset.
+#   2. out/app.js — the client bundle that hydrates the prerendered page. The
+#      page is inert without it: prerender.mjs always emits <script src="app.js">.
+#   3. gds.css + Euclid Circular fonts — compiled from the GDS Tailwind preset.
 FROM node:22-slim AS frontend-build
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json* ./
@@ -13,6 +15,7 @@ RUN npm install --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build:ssr && \
     mkdir -p out && \
+    REO_CLIENT_OUT_DIR=out npm run build:client && \
     npx tailwindcss -i css/entry.css -o out/gds.css --minify && \
     cp -r node_modules/@graphprotocol/gds-css/styles/fonts out/fonts
 
@@ -62,9 +65,9 @@ COPY --from=frontend-build /build/dist-ssr/entry-server.js /app/frontend/dist-ss
 COPY frontend/scripts/prerender.mjs /app/frontend/scripts/prerender.mjs
 COPY frontend/src/lib/data.js /app/frontend/src/lib/data.js
 
-# GDS compiled assets (gds.css + Euclid Circular fonts) from the frontend build.
-# copy_gds_assets() places these in the output dir so Caddy serves them next to
-# index.html.
+# Built frontend assets (app.js + gds.css + Euclid Circular fonts) from the
+# frontend build. copy_gds_assets() places these in the output dir so Caddy
+# serves them next to index.html.
 COPY --from=frontend-build /build/out /app/static/gds
 
 # Create output directory for generated HTML
