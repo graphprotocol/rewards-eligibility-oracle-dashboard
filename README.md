@@ -1,4 +1,4 @@
-# 🍪 Rewards Eligibility Oracle Dashboard
+# Rewards Eligibility Oracle Dashboard
 
 The **Rewards Eligibility Oracle (REO)** dashboard monitors indexer eligibility for rewards based on service quality metrics in [The Graph Protocol](https://thegraph.com).
 
@@ -24,12 +24,18 @@ cd rewards-eligibility-oracle-dashboard
 pip3 install -r requirements.txt
 cp env.example .env
 
+# Build the frontend once (needs Node.js >= 20). This compiles the renderer and
+# the GDS stylesheet that generate_dashboard.py renders through.
+bash scripts/build_frontend.sh
+
 # Edit .env with your API keys and RPC endpoints, then:
 python3 generate_dashboard.py
 open output/index.html
 ```
 
 > The dashboard is written to `output/index.html` (override with `REO_OUTPUT_DIR`).
+> Re-run `scripts/build_frontend.sh` only when frontend code changes; day-to-day
+> data refreshes just need `python3 generate_dashboard.py`.
 > Each environment queries its own chain, so mainnet needs `RPC_ENDPOINT_MAINNET`
 > and testnet needs `RPC_ENDPOINT_TESTNET` (see [env.example](env.example)).
 
@@ -44,6 +50,21 @@ Contract addresses are resolved dynamically per network from the [GitHub registr
 
 The Sepolia registry exposes several oracle variants (`RewardsEligibilityOracleA/B/Mock`); the auto-pick lands on `A`. To pin an explicit address, set `TESTNET_CONTRACT_ADDRESS` (or `MAINNET_CONTRACT_ADDRESS`) in `.env`.
 
+## Architecture
+
+Two halves, one contract between them:
+
+```
+generate_dashboard.py  ->  output/data.json  ->  React (SSG)  ->  output/index.html
+```
+
+`generate_dashboard.py` fetches on-chain data and writes JSON; the React frontend in `frontend/`
+renders that JSON to static HTML. The frontend reads only `data.json`, and Python emits no markup.
+
+Nothing is fetched in the browser — freshness comes from regenerating every ~5 minutes, so the
+page is a snapshot that is never more than one cycle stale. The UI is built on
+[The Graph Design System](https://github.com/graphprotocol/gds) (`@graphprotocol/gds-react`).
+
 ## Data Sources
 
 - **Network Subgraph**: Active indexers (stakedTokens > 0) — both environments query the Arbitrum One network subgraph, so testnet scores the real mainnet indexer set against the testnet oracle
@@ -54,8 +75,7 @@ The Sepolia registry exposes several oracle variants (`RewardsEligibilityOracleA
 ## Documentation
 
 For AI agents and developers:
-- **Deployment Guide**: [docs/agents/DEPLOYMENT.md](docs/agents/DEPLOYMENT.md)
-- **Architecture**: [docs/agents/CLAUDE.md](docs/agents/CLAUDE.md)
+- **Architecture and conventions**: [CLAUDE.md](CLAUDE.md)
 
 ## Telegram Bot (Optional)
 
@@ -77,4 +97,7 @@ MIT License - see [LICENSE](LICENSE) file.
 
 **Links**:
 - [GIP-0079: Indexer Rewards Eligibility Oracle](https://forum.thegraph.com/t/gip-0079-indexer-rewards-eligibility-oracle/6734)
+- [GIP-0079 specification](https://github.com/graphprotocol/graph-improvement-proposals/blob/main/gips/0079.md)
+- [Council ratification: GGP-0058](https://snapshot.org/#/s:council.graphprotocol.eth/proposal/0x68265745988129067231366a8c56e9e13e32693522dd80930a9cc557eebabd22) (passed 6-0)
+- [Eligibility criteria](https://github.com/graphprotocol/rewards-eligibility-oracle/blob/main/ELIGIBILITY_CRITERIA.md#active-eligibility-criteria)
 - [Rewards Eligibility Oracle Contract](https://github.com/graphprotocol/rewards-eligibility-oracle)
