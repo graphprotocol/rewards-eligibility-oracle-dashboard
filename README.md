@@ -33,6 +33,13 @@ python3 generate_dashboard.py
 open output/index.html
 ```
 
+> After deploying, verify visually — an HTTP 200 does not mean the page rendered:
+> ```bash
+> cd frontend && npm run verify -- https://hub.thegraph.foundation/reo
+> ```
+> This drives a real browser, asserts styling/data/hydration, saves screenshots to
+> `verification-shots/`, and exits non-zero on failure.
+>
 > The dashboard is written to `output/index.html` (override with `REO_OUTPUT_DIR`).
 > Re-run `scripts/build_frontend.sh` only when frontend code changes; day-to-day
 > data refreshes just need `python3 generate_dashboard.py`.
