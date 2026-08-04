@@ -59,3 +59,8 @@ allowed_people.txt
 
 # wrangler (CF Pages) local cache/state
 .wrangler/
+
+# Screenshots from scripts/verify-deployment.mjs
+verification-shots/
+# Local .env backups (contain secrets)
+.env.bak*

@@ -12,65 +12,112 @@ This is a **Python-based static dashboard** for monitoring The Graph Protocol's 
 
 ## CRITICAL: Deployment Warnings
 
-**READ BEFORE DEPLOYING**: This section contains critical deployment lessons learned that are not obvious.
+**READ BEFORE DEPLOYING**: every item here comes from something that actually
+broke in production.
 
-### Always Restart the Scheduler
-
-⚠️ **Pulling a new image does NOT update running containers:**
-
-The `reo-scheduler` container runs continuously and regenerates the dashboard every 5 minutes. Simply pulling the image won't update it - you MUST restart the scheduler.
+### The deploy
 
 ```bash
-# Correct deployment workflow:
 cd dashboard-infrastructure/
-docker pull ghcr.io/graphprotocol/rewards-eligibility-oracle-dashboard:latest
+docker compose pull reo reo-scheduler
 docker compose up -d --force-recreate reo reo-scheduler
 
-# Verify the version in production
-docker exec dashboards-caddy grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" /usr/share/nginx/html/reo/index.html | head -1
+# Then ALWAYS verify visually (see below) — never by HTTP status alone:
+cd ../rewards-eligibility-oracle-dashboard/frontend
+npm run verify -- https://hub.thegraph.foundation/reo
 ```
 
-**Mnemonic: "Pull one, restart both"** - When you pull the `reo` image, restart BOTH `reo` AND `reo-scheduler`.
+`reo` is one-shot: it fetches data, writes `output/data.json`, copies the
+frontend assets, and renders `output/index.html`. `reo-scheduler` then repeats
+that every 5 minutes. **Restart both** — pulling an image does not update a
+running container.
 
-### GitHub Actions Timing
+### Verify visually, not with curl
 
-⚠️ **After merging a PR, the `:latest` image is NOT immediately available:**
+An HTTP 200 proves almost nothing here. Real incidents that all returned 200:
 
-1. PR workflow creates `:pr-<number>` tag only (not `:latest`)
-2. After merge, wait for `main` branch workflow to complete (~30-40 seconds)
-3. Only the `main` branch workflow pushes the `:latest` tag
-4. **Verify workflow completed before deploying:**
-   ```bash
-   gh run list --branch main --limit 1
-   # Wait for "completed success" status
-   ```
+- **Completely unstyled page.** `gds.css` and `app.js` 404'd, so the page
+  rendered as raw HTML with a giant blue logo.
+- **Empty page.** Only one network was configured, and that network's oracle had
+  never run, so the roster correctly refused to show anything.
+- **Inert page.** The client bundle was missing from the image, so nothing
+  hydrated — filters and sorting silently did nothing.
 
-### Production Testing Requirements
+`npm run verify -- <url>` catches all three. It drives a real browser and
+asserts the stylesheet is attached, the themed background and brand font are
+applied, the roster has rows, a filter click actually changes the table (proving
+hydration), and mobile renders cards without horizontal overflow. It writes
+screenshots to `verification-shots/` and exits non-zero on failure. **Look at
+the screenshots.**
 
-⚠️ **HTML grep checks are NOT sufficient for UI changes:**
+### The URL must work without a trailing slash
 
-Just verifying HTML contains certain strings doesn't mean the feature works:
-- ❌ `grep "environment-select"` - Only checks HTML exists
-- ✅ **Open in actual browser** - Click toggle, verify it works
-- ✅ **Check browser console** - No JavaScript errors
-- ✅ **Test localStorage** - Refresh page, verify persistence
+`hub.thegraph.foundation/reo` and `.../reo/` must both work. Assets are
+referenced relatively (`gds.css`, `app.js`), so without a redirect the browser
+resolves them against the domain root and they 404 — leaving the page unstyled.
 
-**For any UI change, you MUST test in a real browser before considering deployment complete.**
+Caddy needs an explicit redirect *before* the handler, because `handle /reo*`
+serves `index.html` directly and never issues the directory redirect itself:
 
-### Full Deployment Checklist
+```caddyfile
+redir /reo /reo/ 301
 
-Before calling deployment "done", verify:
-- [ ] Waited for main branch workflow to complete
-- [ ] Force pulled new Docker image
-- [ ] Restarted BOTH `reo` and `reo-scheduler` containers
-- [ ] Verified version in production (via curl or browser)
-- [ ] Opened production URL in browser
-- [ ] Checked browser console for errors
-- [ ] Tested new functionality works
-- [ ] Tested old functionality still works (regression)
-- [ ] Verified visual changes match expectations
+handle /reo* {
+    root * /usr/share/nginx/html/reo
+    uri strip_prefix /reo
+    file_server browse
+}
+```
 
-**See `DEPLOYMENT.md` for detailed explanations and examples.**
+The old dashboard inlined all its CSS, so it survived this; the current build
+depends on external assets and does not.
+
+### Editing the Caddyfile requires restarting Caddy
+
+`infrastructure/caddy/Caddyfile` is bind-mounted as a **single file**. Editors
+that write atomically (temp file + rename) change the inode, and the container
+keeps serving the old one — `caddy reload` will happily report success while
+nothing changes. Confirm the container actually sees the edit:
+
+```bash
+docker exec dashboards-caddy grep -n "redir /reo" /etc/caddy/Caddyfile
+docker restart dashboards-caddy   # if it does not
+```
+
+### Both networks need an RPC endpoint
+
+`.env` must define `RPC_ENDPOINT_MAINNET` as well as `RPC_ENDPOINT_TESTNET`.
+Without the mainnet endpoint the generator silently produces one environment,
+and since the Sepolia oracle has never posted an update the page renders an
+empty state. The public endpoint is sufficient — no key required:
+
+```
+RPC_ENDPOINT_MAINNET=https://arb1.arbitrum.io/rpc
+```
+
+### Image tags
+
+`docker.yml` publishes `:latest` and `:main` on every push to main, and
+`:{version}` for `v*.*.*` git tags. Compose tracks `:latest`. To pin a release,
+tag the repo (`git tag v0.4.0 && git push origin v0.4.0`), wait for the workflow,
+then set the image in `docker-compose.yml`.
+
+### The scheduler healthcheck
+
+It asserts `output/index.html` was rewritten within the last 15 minutes, which
+detects a hung loop rather than just a live process. It deliberately does not
+call `scripts/healthcheck.py` — that file is not in the published image, and
+referencing it left the container permanently unhealthy while it was working
+fine.
+
+### GitHub Actions timing
+
+After merging, `:latest` is not immediately available. Wait for the main-branch
+workflow to finish (~1-2 min):
+
+```bash
+gh run list --branch main --limit 1   # wait for "completed success"
+```
 
 ## Development Commands
 

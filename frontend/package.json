@@ -2,13 +2,14 @@
   "name": "reo-dashboard-frontend",
   "private": true,
   "type": "module",
-  "description": "Rewards Eligibility Oracle dashboard UI — The Graph Design System, prerendered to static HTML.",
+  "description": "Rewards Eligibility Oracle dashboard UI \u2014 The Graph Design System, prerendered to static HTML.",
   "scripts": {
     "build:css": "tailwindcss -i css/entry.css -o ../output/gds.css --minify",
     "build:ssr": "vite build",
     "build:client": "BUILD_TARGET=client vite build",
     "prerender": "node scripts/prerender.mjs",
-    "build": "npm run build:ssr && npm run build:client && npm run build:css && npm run prerender"
+    "build": "npm run build:ssr && npm run build:client && npm run build:css && npm run prerender",
+    "verify": "node scripts/verify-deployment.mjs"
   },
   "dependencies": {
     "@graphprotocol/gds-react": "0.6.0",
@@ -20,6 +21,7 @@
     "@tailwindcss/cli": "^4.3.2",
     "@vitejs/plugin-react": "^5.0.0",
     "tailwindcss": "^4.3.2",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "playwright": "^1.56.0"
   }
 }
