@@ -16,6 +16,10 @@ export function loadDashboardData(dataPath) {
     eligibilityPeriod: Number(env.eligibility_period) || 0,
     // 0 means the oracle has never posted an update on this network.
     oracleUpdatedAt: Number(env.last_oracle_update_time) || 0,
+    // When this dashboard last read the indexer set from the subgraph. Distinct
+    // from the oracle's last on-chain update: the data can be minutes old while
+    // the oracle itself has not run for days.
+    indexersRetrievedAt: Number(env.indexers_retrieved_epoch) || 0,
     indexers: Array.isArray(env.indexers) ? env.indexers : [],
     /**
      * Whether this network has anything the oracle has actually judged.
@@ -33,6 +37,7 @@ export function loadDashboardData(dataPath) {
 
   return {
     generatedAt: raw.generated_at ?? 'unknown',
+    generatedAtEpoch: Number(raw.generated_at_epoch) || 0,
     criteria: raw.eligibility_criteria ?? null,
     environments,
   }
