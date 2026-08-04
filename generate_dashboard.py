@@ -1743,6 +1743,20 @@ def fetch_eligibility_criteria() -> dict:
     return {"items": items, "source_url": ELIGIBILITY_CRITERIA_URL, "is_fallback": False}
 
 
+def _parse_retrieved_epoch(value: Optional[str]) -> Optional[int]:
+    """
+    Convert the generator's own "%Y-%m-%d %H:%M:%S UTC" retrieval stamp to epoch
+    seconds, so the UI can compute a relative age instead of re-parsing a string.
+    """
+    if not value:
+        return None
+    try:
+        stamp = datetime.strptime(value.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S")
+        return int(stamp.replace(tzinfo=timezone.utc).timestamp())
+    except ValueError:
+        return None
+
+
 def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
     """
     Write the single JSON file that is the contract between the two halves of
@@ -1754,6 +1768,7 @@ def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
     """
     payload = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "generated_at_epoch": int(datetime.now(timezone.utc).timestamp()),
         "eligibility_criteria": fetch_eligibility_criteria(),
         "environments": [],
     }
@@ -1783,6 +1798,8 @@ def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
             # (1209600 = 14 days). The UI needs it to compute the grace
             # countdown, which the previous dashboard never displayed.
             "eligibility_period": env_meta.get("eligibility_period"),
+            "indexers_retrieved": env_meta.get("retrieved"),
+            "indexers_retrieved_epoch": _parse_retrieved_epoch(env_meta.get("retrieved")),
             "last_oracle_update_time": env_meta.get("last_oracle_update_time"),
             "stats": env_data.get("stats", {}),
             "indexers": env_data.get("indexers", []),

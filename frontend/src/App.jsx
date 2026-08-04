@@ -5,6 +5,7 @@ import { theGraphLogo } from './lib/logo.js'
 
 import { statusMeta, statusDetail, STATUS_ORDER, explorerChain, arbiscanBase } from './lib/status.js'
 import { summarize } from './lib/summary.js'
+import { formatUTC, relativeAge, daysSince } from './lib/time.js'
 
 /**
  * The Graph Council's vote ratifying GIP-0079 — GGP-0058, passed 6-0 and closed
@@ -32,7 +33,15 @@ const GIP_0079_FORUM_URL =
  * there is one implementation of the UI rather than a static version plus a
  * separate pile of DOM-poking JavaScript.
  */
-export function App({ environments, activeId, generatedAt, version, now, criteria }) {
+export function App({
+  environments,
+  activeId,
+  generatedAt,
+  generatedAtEpoch,
+  version,
+  now,
+  criteria,
+}) {
   const [networkId, setNetworkId] = useState(activeId)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -79,7 +88,12 @@ export function App({ environments, activeId, generatedAt, version, now, criteri
             }}
           />
         </main>
-        <SiteFooter generatedAt={generatedAt} version={version} env={active} />
+        <SiteFooter
+          generatedAt={generatedAt}
+          generatedAtEpoch={generatedAtEpoch}
+          version={version}
+          env={active}
+        />
       </div>
     </GDSProvider>
   )
@@ -475,34 +489,56 @@ function IndexerCard({ indexer, env, now }) {
  * thing it exists to monitor: a stalled oracle looks identical to a healthy one.
  */
 function OracleFreshness({ env, now }) {
-  if (!env.oracleUpdatedAt) return null
+  const oracleRan = env.oracleUpdatedAt
+  const dataRead = env.indexersRetrievedAt
+  if (!oracleRan && !dataRead) return null
 
-  const lastRun = new Date(env.oracleUpdatedAt * 1000)
-  const daysAgo = Math.floor((now - env.oracleUpdatedAt * 1000) / 86_400_000)
-  const stale = env.eligibilityPeriod > 0 && now - env.oracleUpdatedAt * 1000 > env.eligibilityPeriod * 1000
-  const when = lastRun.toISOString().slice(0, 10)
+  // Two different clocks, and conflating them hides real failures: the indexer
+  // list can be two minutes old while the oracle itself has not run for days.
+  const oracleWhen = formatUTC(oracleRan)
+  const oracleAge = relativeAge(oracleRan, now)
+  const dataWhen = formatUTC(dataRead)
+  const dataAge = relativeAge(dataRead, now)
 
-  if (!stale) {
+  const days = daysSince(oracleRan, now)
+  const stale =
+    oracleRan > 0 &&
+    env.eligibilityPeriod > 0 &&
+    now - oracleRan * 1000 > env.eligibilityPeriod * 1000
+
+  const dataLine = dataWhen ? (
+    <span>
+      Indexer data refreshed {dataWhen} ({dataAge}).
+    </span>
+  ) : null
+
+  if (stale) {
     return (
-      <p className="text-14 text-muted">
-        Oracle last ran {when} ({daysAgo === 0 ? 'today' : `${daysAgo} days ago`}).
-      </p>
+      <Card>
+        <div className="flex flex-col gap-1 p-4">
+          <span className="text-14 font-semibold text-default">
+            The oracle has not run for {days} days
+          </span>
+          <span className="text-14 text-muted">
+            It last posted an update on {oracleWhen} ({oracleAge}), longer ago than the{' '}
+            {Math.round(env.eligibilityPeriod / 86400)}-day eligibility period. Statuses below are
+            the last ones it recorded and may no longer reflect current service quality.
+          </span>
+          {dataLine && <span className="text-14 text-muted">{dataLine}</span>}
+        </div>
+      </Card>
     )
   }
 
   return (
-    <Card>
-      <div className="flex flex-col gap-1 p-4">
-        <span className="text-14 font-semibold text-default">
-          The oracle has not run for {daysAgo} days
+    <p className="flex flex-col gap-0.5 text-14 text-muted sm:flex-row sm:gap-2">
+      {oracleWhen && (
+        <span>
+          Oracle last ran {oracleWhen} ({oracleAge}).
         </span>
-        <span className="text-14 text-muted">
-          It last posted an update on {when}, longer ago than the{' '}
-          {Math.round(env.eligibilityPeriod / 86400)}-day eligibility period. Statuses below are the
-          last ones it recorded and may no longer reflect current service quality.
-        </span>
-      </div>
-    </Card>
+      )}
+      {dataLine}
+    </p>
   )
 }
 
@@ -608,7 +644,7 @@ function EligibilityCriteria({ criteria }) {
   )
 }
 
-function SiteFooter({ generatedAt, version, env }) {
+function SiteFooter({ generatedAt, generatedAtEpoch, version, env }) {
   const base = arbiscanBase(env.networkId)
   const contract = env.contractAddress
 
@@ -630,7 +666,8 @@ function SiteFooter({ generatedAt, version, env }) {
           </a>
         )}
         <span className="ml-auto">
-          Updated {generatedAt} · refreshes every 5 minutes · {version}
+          Page generated {formatUTC(generatedAtEpoch) ?? generatedAt} · refreshes every 5 minutes ·{' '}
+          {version}
         </span>
       </div>
     </footer>

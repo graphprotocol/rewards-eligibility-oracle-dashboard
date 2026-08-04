@@ -35,7 +35,7 @@ const { renderPage, theGraphLogo } = await import(join(frontendRoot, 'dist-ssr/e
  */
 const FAVICON = encodeURIComponent(theGraphLogo.replace('currentcolor', '#6f4cff'))
 
-const { generatedAt, environments, criteria } = loadDashboardData(dataPath)
+const { generatedAt, generatedAtEpoch, environments, criteria } = loadDashboardData(dataPath)
 if (environments.length === 0) {
   console.error(`No environments in ${dataPath} — refusing to render an empty page.`)
   process.exit(1)
@@ -47,7 +47,15 @@ const activeId = environments.find((e) => e.available)?.id ?? environments[0].id
 
 // `now` is fixed at render time and shipped to the client, so the grace
 // countdown is identical on both sides and hydration cannot mismatch.
-const props = { environments, activeId, generatedAt, version: VERSION, now: Date.now(), criteria }
+const props = {
+  environments,
+  activeId,
+  generatedAt,
+  generatedAtEpoch,
+  version: VERSION,
+  now: Date.now(),
+  criteria,
+}
 const body = renderPage(props)
 
 // The client hydrates from exactly these props, so server and client can never
