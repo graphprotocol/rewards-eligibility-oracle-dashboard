@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { loadDashboardData } from '../src/lib/data.js'
 
 /** Bumped by hand; shown in the footer so a deploy can be identified on sight. */
-const VERSION = 'v0.3.0'
+const VERSION = 'v0.4.0'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const frontendRoot = join(here, '..')
