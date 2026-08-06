@@ -47,9 +47,11 @@ class TestSubgraphDataFetching:
                 output_file="/tmp/test_active_indexers.json"
             )
 
-            # Verify the request was made to the correct endpoint
-            mock_post.assert_called_once()
-            call_args = mock_post.call_args
+            # Verify the first request (network subgraph) was made to the correct
+            # endpoint. A second call also fires for ENS name resolution, so we
+            # check the first call specifically rather than asserting call count.
+            assert mock_post.call_count >= 1
+            call_args = mock_post.call_args_list[0]
             assert "gateway.thegraph.com" in call_args[0][0]
             assert "stakedTokens_gt" in call_args[1]['json']['query']
 
@@ -141,29 +143,38 @@ class TestSubgraphDataFetching:
         ens_response.raise_for_status = Mock()
 
         # Act & Assert
-        with patch('requests.post') as mock_post:
-            mock_post.side_effect = [network_response, ens_response]
+        import os
+        import tempfile
+        import shutil
+        import database
 
-            from generate_dashboard import retrieveActiveIndexers
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            test_db_path = os.path.join(tmp_dir, "test_reo.db")
+            with patch('database.DB_PATH', test_db_path), patch('requests.post') as mock_post:
+                mock_post.side_effect = [network_response, ens_response]
 
-            result = retrieveActiveIndexers(
-                graph_api_key="test-key",
-                output_file="/tmp/test_ens.json",
-                use_cached_ens=False
-            )
+                database.init_db()
 
-            # Should make 2 calls: Network + ENS
-            assert mock_post.call_count == 2
+                from generate_dashboard import retrieveActiveIndexers
 
-            # Verify ENS query format
-            ens_call = mock_post.call_args_list[1]
-            assert "domains" in ens_call[1]['json']['query']
-            assert "resolvedAddress_in" in ens_call[1]['json']['query']
+                result = retrieveActiveIndexers(
+                    graph_api_key="test-key",
+                    output_file="/tmp/test_ens.json",
+                    use_cached_ens=False
+                )
 
-            # Verify ENS cache file was created
-            import os
-            assert os.path.exists("ens_resolution.json")
+                # Should make 2 calls: Network + ENS
+                assert mock_post.call_count == 2
 
-            # Cleanup
-            if os.path.exists("ens_resolution.json"):
-                os.remove("ens_resolution.json")
+                # Verify ENS query format
+                ens_call = mock_post.call_args_list[1]
+                assert "domains" in ens_call[1]['json']['query']
+                assert "resolvedAddress_in" in ens_call[1]['json']['query']
+
+                # Verify the resolved name was cached in the database (ENS
+                # caching moved from ens_resolution.json to the ens_cache table)
+                cache = database.load_ens_cache()
+                assert cache.get("0x1234567890123456789012345678901234567890") == "indexer.eth"
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
