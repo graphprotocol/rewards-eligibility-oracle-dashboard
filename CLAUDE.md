@@ -126,10 +126,16 @@ gh run list --branch main --limit 1   # wait for "completed success"
 # Generate the dashboard (fetches live data from contracts/subgraphs)
 python3 generate_dashboard.py
 
-# View the generated dashboard
-open output/index.html  # macOS
-# or open in browser directly
+# View the generated dashboard — it MUST be served over http
+python3 -m http.server 8799 --directory output
+open http://localhost:8799/
 ```
+
+**Do not `open output/index.html`.** The page hydrates from an ES module
+(`app.js`), and browsers refuse to load modules from a `file://` origin — CORS
+blocks it, so the markup renders but nothing is interactive. Copy buttons do
+nothing, filters do nothing, sorting does nothing, and none of it reports an
+error anywhere the reader will see. It looks like a working page.
 
 ### Environment Setup
 ```bash
@@ -149,15 +155,14 @@ pytest tests/unit/
 # Run specific test file
 pytest tests/unit/test_block_parsing.py -v
 
-# Run integration tests (requires environment setup)
-bash tests/integration/test_frontend_toggle.sh
+# Verify a built or deployed page end-to-end (real browser, real assertions)
+cd frontend && npm run build && npm run verify -- <url>
 ```
 
-### Telegram Bot (Optional)
-```bash
-# Run the bot 24/7 for user subscriptions
-python3 telegram_bot.py
-```
+`tests/integration/test_frontend_toggle.sh` predates the React rewrite — it
+drives `agent-browser` looking for an "Environment:" `<select>` that no longer
+exists. `frontend/scripts/verify-deployment.mjs` is the frontend test that is
+actually maintained.
 
 ## Architecture Overview
 
@@ -235,19 +240,24 @@ The dashboard supports multiple contract deployments simultaneously:
   - `src/lib/status.js` - Eligibility domain logic (status → GDS variant, grace countdown)
   - `src/lib/data.js` - Reads `output/data.json`; the frontend reads nothing else
   - `scripts/prerender.mjs` - Renders `output/index.html` atomically
+  - `scripts/verify-deployment.mjs` - The frontend test. Drives a real browser
+  - `css/entry.css` - Tailwind/GDS entry point. Nothing hand-written belongs here
+
+- **`.claude/skills/gds/`** - The Graph Design System's own skill, vendored from
+  `graphprotocol/gds` (`packages/react/skill`). Read it before any UI change;
+  re-copy it when GDS is upgraded so it tracks the installed version
 
 - **`scheduler.py`** - Runs continuously, regenerates dashboard every 5 minutes
   - Reads from `.env` for configuration
   - Calls `generate_dashboard.py()` on schedule
   - Logs generation results
 
-- **`telegram_bot.py`** - 24/7 bot service for user subscriptions
-  - Commands: `/start`, `/watch <address>`, `/unwatch <address>`, `/watchlist`, `/status`, `/help`, `/test`
-  - Manages `subscribers_telegram.json`
+- **`storage.py`** - Round-trips run-to-run state through Vercel Blob
+  - A no-op unless `BLOB_READ_WRITE_TOKEN` is set, so local runs are unaffected
+  - `pull()`/`push()` for working state; `publish()` for the generated `data.json`
 
-- **`telegram_notifier.py`** - Notification sender (called by dashboard script)
-  - Filters notifications by watched indexers
-  - Sends daily summaries via Telegram
+- **`api/refresh.py`** - The hourly cron function (Vercel). Serverless `scheduler.py`
+- **`api/render.js`** - Renders the page per request from the published `data.json`
 
 - **`database.py`** - SQLite database operations
   - ENS cache storage and retrieval
@@ -256,7 +266,8 @@ The dashboard supports multiple contract deployments simultaneously:
 
 - **`env.example`** - Template for `.env` configuration
   - Required: `ARBISCAN_API_KEY`, `GRAPH_API_KEY`, `RPC_ENDPOINT`
-  - Optional: `TELEGRAM_BOT_TOKEN`, `DASHBOARD_URL`, `USE_CACHED_ENS`
+  - Optional: `USE_CACHED_ENS`
+  - Vercel only: `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`
   - Manual environment config: `TESTNET_NEW_CONTRACT_ADDRESS`, `TESTNET_NEW_DEPLOYMENT_BLOCK`
 
 ## Contract Interaction
@@ -293,11 +304,43 @@ The renderer is a self-contained bundle built by `vite build`, so the runtime
 image needs a `node` binary but **no `node_modules`**.
 
 ### Adding Dashboard Features
+
+**Read `.claude/skills/gds/SKILL.md` before touching any UI.** It is the design
+system's own guidance, vendored into this repo, and it is the difference between
+using GDS and merely importing it. Its `references/tokens.md` is required
+reading — standard Tailwind tokens (`text-sm`, `rounded-md`, `max-w-xl`,
+`text-gray-500`) do not exist here; GDS replaces the whole scale.
+
+`.mcp.json` points at the GDS Storybook MCP server. With it connected you can
+ask for a component's real prop types and usage examples instead of guessing.
+
 1. UI lives in `frontend/src/App.jsx`; build with `bash scripts/build_frontend.sh`
-2. Use GDS components from `@graphprotocol/gds-react` — do not hand-roll equivalents
-3. Style with GDS Tailwind utilities/tokens; there is no hand-written CSS file
-4. If the UI needs a new field, add it in `write_dashboard_data()` first — `data.json`
-   is the only channel between the halves
+2. Use GDS components from `@graphprotocol/gds-react` — do not hand-roll
+   equivalents. Before writing a control, check the component table in the skill.
+   Filters are `Chip.Group`, view switches are `SegmentedControl`, sorting is
+   built into `Table`, addresses are `Address`, key/value data is
+   `DescriptionList`, links are `Link`, buttons are `Button`. Every one of those
+   was hand-rolled here once and every one was worse.
+3. Style with GDS Tailwind utilities/tokens; there is no hand-written CSS file.
+   `css/entry.css` exists only to register the Tailwind sources.
+4. Do not fight a component with `className`. Components already carry their own
+   padding, colour and layout — `Card`, notably, pads itself, so an inner `p-6`
+   doubles it. `className` is for extrinsic layout only (margin, grid placement,
+   max-width), or for CSS props like `max-sm:prop-size-small`.
+5. If the UI needs a new field, add it in `write_dashboard_data()` first —
+   `data.json` is the only channel between the halves
+
+**There is no separate mobile rendering.** The roster is one `Table` that
+scrolls horizontally on small screens, which is what GDS's `Table` is built to
+do. It used to be a table *plus* a duplicate card list for `max-md`, which
+rendered all 97 rows twice into every page.
+
+**The roster renders `VISIBLE_ROWS` (25) until "View all" is clicked**, so the
+criteria and oracle panels below it are reachable. Two consequences: the
+prerendered `index.html` contains 25 rows, not all of them (the rest live in the
+embedded JSON and appear on expand); and sorting is applied in `Roster` *before*
+truncating, then again by `Table.Body`, using the same `COMPARATORS`. Slicing
+first would make the table "25 arbitrary rows, then sorted".
 
 ### Updating Subgraph Queries
 1. Query in `retrieveActiveIndexers()` function
@@ -312,11 +355,66 @@ image needs a `node` binary but **no `node_modules`**.
 
 ## Deployment
 
-**Production deployment** uses Docker Compose:
+There are two supported targets. They share the entire pipeline and the entire
+UI; they differ only in **when index.html is rendered**.
+
+### Docker Compose (current production)
+
 - Separate infrastructure repository: `dashboard-infrastructure`
 - `reo` container: One-shot container that generates dashboard on startup
 - `reo-scheduler` container: Runs continuously, regenerates every 5 minutes
 - `caddy` container: Web server that serves static HTML files
 - Volumes: `reo-output` for generated HTML, `reo-data` for database
 
+Renders **ahead of time**: `render_dashboard()` shells out to
+`frontend/scripts/prerender.mjs`, which writes `output/index.html`.
+
 **For detailed deployment instructions**, see `DEPLOYMENT.md`.
+
+### Vercel
+
+Renders **per request**: `api/render.js` runs the same SSR bundle over the
+`data.json` that `api/refresh.py` published to Blob, and caches the result for
+an hour. The two paths are verified byte-identical for the same data — if you
+change one, change the shared code in `frontend/src/lib/document.js` and
+`entry-server.jsx`, never one caller alone.
+
+Why per request: a Vercel deployment is immutable, so an `index.html` baked at
+build time would freeze the dashboard at deploy time while the hourly cron kept
+updating Blob forever. `scripts/build_vercel.sh` fails the build if an
+`index.html` appears in `public/`, because it would shadow the render function
+and resurrect exactly that bug.
+
+**Setup, once:**
+
+1. Import the repo as a Vercel project. `vercel.json` supplies the build command,
+   output directory, cron, and the `/` → `/api/render` rewrite.
+2. Create a Blob store and connect it to the project (sets `BLOB_READ_WRITE_TOKEN`).
+3. Set `CRON_SECRET` to a random 16+ character string. **`api/refresh.py` fails
+   closed** — with no secret set, every request is denied, including the cron's.
+4. Set `GRAPH_API_KEY`, `ARBISCAN_API_KEY`, `RPC_ENDPOINT_MAINNET`, and
+   `RPC_ENDPOINT_TESTNET`. The mainnet endpoint is not optional — see the warning
+   above about the silently-empty page.
+5. Deploy, then trigger the first refresh by hand. Until it completes, Blob has
+   no `data.json` and the page correctly serves a 503 "Generating" placeholder:
+
+   ```bash
+   curl -H "Authorization: Bearer $CRON_SECRET" https://<deployment>/api/refresh
+   ```
+
+6. Verify visually, exactly as with Docker — an HTTP 200 still proves nothing:
+
+   ```bash
+   cd frontend && npm run verify -- https://<deployment>
+   ```
+
+**State lives in Blob, not on disk.** The filesystem is per-invocation, so
+`storage.py` pulls the working files before each run and pushes them after.
+Without that, every run would see a blank slate and conclude nothing had ever
+changed — silently breaking status-change detection, the activity log, streaks,
+and the ENS cache. `BLOB_READ_WRITE_TOKEN` is the switch: unset, `storage.py`
+does nothing, which is what keeps local runs identical to how they always were.
+
+**Single writer.** One cron writes this state and there are no locks. Do not add
+a second writer without replacing `storage.py` with something that has real
+atomicity.

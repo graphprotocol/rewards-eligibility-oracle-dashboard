@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs'
 
 /**
- * Loads output/data.json — the single contract between the Python data layer
- * and this renderer. Python owns fetching and shape; the frontend owns
- * presentation and never reads anything else.
+ * Normalizes the parsed contents of data.json — the single contract between the
+ * Python data layer and this renderer. Python owns fetching and shape; the
+ * frontend owns presentation and never reads anything else.
+ *
+ * Split from the filesystem read so the same normalization runs whether the
+ * bytes came from disk (the prerenderer) or over the network (the serverless
+ * render function). Everything below is pure.
  */
-export function loadDashboardData(dataPath) {
-  const raw = JSON.parse(readFileSync(dataPath, 'utf8'))
-
+export function parseDashboardData(raw) {
   const environments = (raw.environments ?? []).map((env) => ({
     id: env.id,
     label: env.label ?? env.id,
@@ -41,4 +43,9 @@ export function loadDashboardData(dataPath) {
     criteria: raw.eligibility_criteria ?? null,
     environments,
   }
+}
+
+/** Reads and normalizes data.json from disk. Used by the prerenderer. */
+export function loadDashboardData(dataPath) {
+  return parseDashboardData(JSON.parse(readFileSync(dataPath, 'utf8')))
 }

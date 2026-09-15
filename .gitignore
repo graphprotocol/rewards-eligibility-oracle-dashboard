@@ -49,8 +49,6 @@ active_indexers.json
 active_indexers_previous_run.json
 activity_log_indexers_status_changes.json
 
-# Telegram bot files
-subscribers_telegram.json
 logs/
 cron.log
 
@@ -62,5 +60,13 @@ allowed_people.txt
 
 # Screenshots from scripts/verify-deployment.mjs
 verification-shots/
+
+# Vercel: static build output and the root manifest's deps
+public/
+/node_modules/
+.vercel/
 # Local .env backups (contain secrets)
 .env.bak*
+
+# Personal Claude Code settings — the vendored GDS skill in .claude/skills is shared, this is not
+.claude/settings.local.json

@@ -11,11 +11,9 @@
 @source '../src';
 
 /*
- * GDS's ThemeSwitcher renders Base UI radios that set outline-width: 0, leaving
- * the only keyboard-invisible control on the page. Restore the same ring every
- * other control gets.
+ * Nothing else belongs in this file. GDS styles everything through components
+ * and Tailwind tokens; a hand-written rule here is a sign that a component is
+ * being fought rather than used. (The one rule that used to live here patched
+ * ThemeSwitcher's focus ring — gds-react 0.6 builds ThemeSwitcher on
+ * SegmentedControl, which draws its own `has-focus-visible:outline`.)
  */
-[role='radio']:focus-visible {
-  outline: 1px solid var(--color-brand-500);
-  outline-offset: 1px;
-}
