@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "retrieved": "2026-08-03 18:42:45 UTC",
-    "total_count": 97,
+    "retrieved": "2026-09-15 19:41:25 UTC",
+    "total_count": 98,
     "last_oracle_update_time": 0,
     "eligibility_period": 1209600,
     "transaction_hash": "0x36f3b72b4a49283eacdb39ffbe9b74abeb9f1dff598ec85e5d1c012151aea00e",
@@ -25,6 +25,20 @@
     {
       "address": "0x01f17c392614c7ea586e7272ed348efee21b90a3",
       "ens_name": "oraclegen-indexer.eth",
+      "is_eligible": true,
+      "status": "ineligible-unqualified",
+      "eligible_until": "",
+      "eligible_until_readable": "",
+      "eligibility_renewal_time": 0,
+      "last_status_change_date": "",
+      "last_renewed_on_tx": "",
+      "eligibility_renewal_time_readable": "Never",
+      "eligibility_renewal_time_short": "Never",
+      "eligible_until_short": ""
+    },
+    {
+      "address": "0x02526499ae2879a94090267017c3816f733825bb",
+      "ens_name": "",
       "is_eligible": true,
       "status": "ineligible-unqualified",
       "eligible_until": "",
@@ -107,7 +121,7 @@
       "eligible_until_short": ""
     },
     {
-      "address": "0x0d6c95e9f6a2efe62e78ee0b73f976737942d9d3",
+      "address": "0x0e9193def3016ade132afbfc3f9a3018813700a0",
       "ens_name": "",
       "is_eligible": true,
       "status": "ineligible-unqualified",
@@ -157,20 +171,6 @@
       "eligible_until_readable": "",
       "eligibility_renewal_time": 0,
       "last_status_change_date": "10/Feb/2026",
-      "last_renewed_on_tx": "",
-      "eligibility_renewal_time_readable": "Never",
-      "eligibility_renewal_time_short": "Never",
-      "eligible_until_short": ""
-    },
-    {
-      "address": "0x19a4fe7d0c76490cca77b45580846cdb38b9a406",
-      "ens_name": "amencer.eth",
-      "is_eligible": true,
-      "status": "ineligible-unqualified",
-      "eligible_until": "",
-      "eligible_until_readable": "",
-      "eligibility_renewal_time": 0,
-      "last_status_change_date": "",
       "last_renewed_on_tx": "",
       "eligibility_renewal_time_readable": "Never",
       "eligibility_renewal_time_short": "Never",
@@ -290,7 +290,7 @@
     },
     {
       "address": "0x35917c0eb91d2e21bef40940d028940484230c06",
-      "ens_name": "streamingfastindexer.eth",
+      "ens_name": "",
       "is_eligible": true,
       "status": "ineligible-unqualified",
       "eligible_until": "",
@@ -737,6 +737,20 @@
       "eligible_until_short": ""
     },
     {
+      "address": "0x8f63c9a930cb3ec7abab669ac771326cf2b3cf23",
+      "ens_name": "",
+      "is_eligible": true,
+      "status": "ineligible-unqualified",
+      "eligible_until": "",
+      "eligible_until_readable": "",
+      "eligibility_renewal_time": 0,
+      "last_status_change_date": "",
+      "last_renewed_on_tx": "",
+      "eligibility_renewal_time_readable": "Never",
+      "eligibility_renewal_time_short": "Never",
+      "eligible_until_short": ""
+    },
+    {
       "address": "0x9082f497bdc512d08ffde50d6fce28e72c2addcf",
       "ens_name": "holographic-indexer.eth",
       "is_eligible": true,
@@ -1045,20 +1059,6 @@
       "eligible_until_short": ""
     },
     {
-      "address": "0xdadd39d589fa13faaabe1610598de6b7fa8439ba",
-      "ens_name": "",
-      "is_eligible": true,
-      "status": "ineligible-unqualified",
-      "eligible_until": "",
-      "eligible_until_readable": "",
-      "eligibility_renewal_time": 0,
-      "last_status_change_date": "",
-      "last_renewed_on_tx": "",
-      "eligibility_renewal_time_readable": "Never",
-      "eligibility_renewal_time_short": "Never",
-      "eligible_until_short": ""
-    },
-    {
       "address": "0xdc53e62df89fd07b31ed4ff886397b9e7ae4625e",
       "ens_name": "",
       "is_eligible": true,
@@ -1278,6 +1278,20 @@
       "eligibility_renewal_time": 0,
       "last_status_change_date": "29/Jul/2026",
       "last_renewed_on_tx": "0xa15e25c16c54400ae3b56e10872a342a8b00a4970779e9f9210fc4063d3b39cb",
+      "eligibility_renewal_time_readable": "Never",
+      "eligibility_renewal_time_short": "Never",
+      "eligible_until_short": ""
+    },
+    {
+      "address": "0xf123e51b8e0a371cc538323470bb9668f6802a6f",
+      "ens_name": "",
+      "is_eligible": true,
+      "status": "ineligible-unqualified",
+      "eligible_until": "",
+      "eligible_until_readable": "",
+      "eligibility_renewal_time": 0,
+      "last_status_change_date": "",
+      "last_renewed_on_tx": "",
       "eligibility_renewal_time_readable": "Never",
       "eligibility_renewal_time_short": "Never",
       "eligible_until_short": ""

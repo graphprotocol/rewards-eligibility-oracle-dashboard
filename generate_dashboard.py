@@ -1237,9 +1237,22 @@ def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC]
             if grace_buffer_cutoff and eligibility_renewal_time >= grace_buffer_cutoff:
                 # Indexer is eligible (within buffer period)
                 indexer["status"] = "eligible-active"
-                indexer["eligible_until"] = ""
-                indexer["eligible_until_readable"] = ""
-                indexer["eligible_until_short"] = ""
+                # An active indexer's eligibility lapses on exactly the same
+                # clock as a grace-period one: renewal + eligibility_period.
+                # Being renewed in the latest oracle update does not make that
+                # deadline go away, it just means it keeps being pushed back.
+                # Leaving it blank made the "Eligible until" column read
+                # "Not set" for every eligible indexer on the dashboard.
+                if eligibility_period and eligibility_renewal_time > 0:
+                    eligible_until = eligibility_renewal_time + eligibility_period
+                    dt_until = datetime.fromtimestamp(eligible_until, tz=timezone.utc)
+                    indexer["eligible_until"] = eligible_until
+                    indexer["eligible_until_readable"] = dt_until.strftime("%-d-%b-%Y at %H:%M:%S UTC")
+                    indexer["eligible_until_short"] = dt_until.strftime("%-d-%b-%Y")
+                else:
+                    indexer["eligible_until"] = ""
+                    indexer["eligible_until_readable"] = ""
+                    indexer["eligible_until_short"] = ""
                 # Update last_renewed_on_tx with current transaction hash when eligible
                 if transaction_hash:
                     indexer["last_renewed_on_tx"] = transaction_hash
