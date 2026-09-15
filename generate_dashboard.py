@@ -513,13 +513,6 @@ def get_rpc_manager() -> RoundRobinRPC:
         _rpc_manager = RoundRobinRPC()
     return _rpc_manager
 
-# Import telegram notifier (will be skipped if module not available)
-try:
-    import telegram_notifier
-    TELEGRAM_AVAILABLE = True
-except ImportError:
-    TELEGRAM_AVAILABLE = False
-
 
 def get_last_transaction_from_json(json_file: str = 'last_transaction.json') -> Optional[dict]:
     """Wrapper: now uses database instead of JSON file."""
@@ -1907,7 +1900,7 @@ def _write_atomic(path: str, content: str) -> None:
             os.unlink(tmp_path)
         raise
 
-def main() -> bool:
+def main(render: bool = True) -> bool:
     """
     Main function to generate the multi-environment dashboard.
 
@@ -2107,25 +2100,6 @@ def main() -> bool:
         print(f"✓ {env_key} stats: {environment_data[env_key]['stats']}")
         print()
 
-    # Send Telegram notifications (only once, using testnet data)
-    if TELEGRAM_AVAILABLE and 'testnet' in environment_data:
-        try:
-            print("Sending Telegram notifications...")
-            # Temporarily copy testnet data to default location for notifier
-            if os.path.exists('active_indexers_testnet.json'):
-                import shutil
-                shutil.copy('active_indexers_testnet.json', 'active_indexers.json')
-                if os.path.exists('active_indexers_testnet_previous_run.json'):
-                    shutil.copy('active_indexers_testnet_previous_run.json', 'active_indexers_previous_run.json')
-                telegram_notifier.send_notifications()
-            print()
-        except Exception as e:
-            print(f"⚠ Warning: Could not send Telegram notifications: {e}")
-            print()
-    else:
-        print("ℹ️ Telegram notifications disabled (module not available)")
-        print()
-
     # Generate HTML with all environment data
     print("=" * 70)
     print("Generating HTML dashboard...")
@@ -2150,11 +2124,19 @@ def main() -> bool:
     os.makedirs(output_dir, exist_ok=True)
 
     write_dashboard_data(environment_data, output_dir)
-    copy_gds_assets(output_dir)
-    # A failed render leaves the previous index.html in place, so the data is
-    # fresh but what visitors see is not. That is a failed run as far as the
-    # caller is concerned, even though serving stale HTML beats serving none.
-    rendered = render_dashboard(output_dir)
+
+    if render:
+        copy_gds_assets(output_dir)
+        # A failed render leaves the previous index.html in place, so the data is
+        # fresh but what visitors see is not. That is a failed run as far as the
+        # caller is concerned, even though serving stale HTML beats serving none.
+        rendered = render_dashboard(output_dir)
+    else:
+        # The serverless path (api/refresh.py) produces data.json only: the page
+        # is rendered per request from it, and the static assets ship with the
+        # deployment. There is no index.html here that could go stale, so the
+        # run's success is decided by the data alone.
+        rendered = True
 
     # Log execution time
     end_time = datetime.now(timezone.utc)

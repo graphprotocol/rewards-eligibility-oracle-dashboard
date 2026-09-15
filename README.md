@@ -12,8 +12,7 @@ The REO links indexer eligibility for rewards to service quality provision. Only
 - 🎯 Real-time eligibility tracking for all active indexers
 - 🌍 Multi-environment toggle (compare deployments)
 - 📊 Status categories: Active, Grace, Expired, Unqualified
-- 🔔 Optional Telegram notifications for status changes
-- 🔄 Auto-refreshes every 5 minutes
+- 🔄 Auto-refreshes on a schedule (5 minutes on Docker, hourly on Vercel)
 
 ## Quick Start
 
@@ -83,18 +82,6 @@ page is a snapshot that is never more than one cycle stale. The UI is built on
 
 For AI agents and developers:
 - **Architecture and conventions**: [CLAUDE.md](CLAUDE.md)
-
-## Telegram Bot (Optional)
-
-```bash
-# Add to .env:
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-
-# Run the bot
-python3 telegram_bot.py
-```
-
-**Commands**: `/start`, `/watch <address>`, `/unwatch <address>`, `/watchlist`, `/status`, `/help`
 
 ## License
 
