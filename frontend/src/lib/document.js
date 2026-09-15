@@ -7,7 +7,7 @@
  */
 
 /** Bumped by hand; shown in the footer so a deploy can be identified on sight. */
-export const VERSION = 'v0.4.1'
+export const VERSION = 'v0.5.0'
 
 /**
  * Raised when there is nothing worth publishing. Both callers treat this as

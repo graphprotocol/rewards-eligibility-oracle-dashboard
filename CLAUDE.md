@@ -149,9 +149,14 @@ pytest tests/unit/
 # Run specific test file
 pytest tests/unit/test_block_parsing.py -v
 
-# Run integration tests (requires environment setup)
-bash tests/integration/test_frontend_toggle.sh
+# Verify a built or deployed page end-to-end (real browser, real assertions)
+cd frontend && npm run build && npm run verify -- <url>
 ```
+
+`tests/integration/test_frontend_toggle.sh` predates the React rewrite — it
+drives `agent-browser` looking for an "Environment:" `<select>` that no longer
+exists. `frontend/scripts/verify-deployment.mjs` is the frontend test that is
+actually maintained.
 
 ## Architecture Overview
 
@@ -229,6 +234,12 @@ The dashboard supports multiple contract deployments simultaneously:
   - `src/lib/status.js` - Eligibility domain logic (status → GDS variant, grace countdown)
   - `src/lib/data.js` - Reads `output/data.json`; the frontend reads nothing else
   - `scripts/prerender.mjs` - Renders `output/index.html` atomically
+  - `scripts/verify-deployment.mjs` - The frontend test. Drives a real browser
+  - `css/entry.css` - Tailwind/GDS entry point. Nothing hand-written belongs here
+
+- **`.claude/skills/gds/`** - The Graph Design System's own skill, vendored from
+  `graphprotocol/gds` (`packages/react/skill`). Read it before any UI change;
+  re-copy it when GDS is upgraded so it tracks the installed version
 
 - **`scheduler.py`** - Runs continuously, regenerates dashboard every 5 minutes
   - Reads from `.env` for configuration
@@ -287,11 +298,36 @@ The renderer is a self-contained bundle built by `vite build`, so the runtime
 image needs a `node` binary but **no `node_modules`**.
 
 ### Adding Dashboard Features
+
+**Read `.claude/skills/gds/SKILL.md` before touching any UI.** It is the design
+system's own guidance, vendored into this repo, and it is the difference between
+using GDS and merely importing it. Its `references/tokens.md` is required
+reading — standard Tailwind tokens (`text-sm`, `rounded-md`, `max-w-xl`,
+`text-gray-500`) do not exist here; GDS replaces the whole scale.
+
+`.mcp.json` points at the GDS Storybook MCP server. With it connected you can
+ask for a component's real prop types and usage examples instead of guessing.
+
 1. UI lives in `frontend/src/App.jsx`; build with `bash scripts/build_frontend.sh`
-2. Use GDS components from `@graphprotocol/gds-react` — do not hand-roll equivalents
-3. Style with GDS Tailwind utilities/tokens; there is no hand-written CSS file
-4. If the UI needs a new field, add it in `write_dashboard_data()` first — `data.json`
-   is the only channel between the halves
+2. Use GDS components from `@graphprotocol/gds-react` — do not hand-roll
+   equivalents. Before writing a control, check the component table in the skill.
+   Filters are `Chip.Group`, view switches are `SegmentedControl`, sorting is
+   built into `Table`, addresses are `Address`, key/value data is
+   `DescriptionList`, links are `Link`, buttons are `Button`. Every one of those
+   was hand-rolled here once and every one was worse.
+3. Style with GDS Tailwind utilities/tokens; there is no hand-written CSS file.
+   `css/entry.css` exists only to register the Tailwind sources.
+4. Do not fight a component with `className`. Components already carry their own
+   padding, colour and layout — `Card`, notably, pads itself, so an inner `p-6`
+   doubles it. `className` is for extrinsic layout only (margin, grid placement,
+   max-width), or for CSS props like `max-sm:prop-size-small`.
+5. If the UI needs a new field, add it in `write_dashboard_data()` first —
+   `data.json` is the only channel between the halves
+
+**There is no separate mobile rendering.** The roster is one `Table` that
+scrolls horizontally on small screens, which is what GDS's `Table` is built to
+do. It used to be a table *plus* a duplicate card list for `max-md`, which
+rendered all 97 rows twice into every page.
 
 ### Updating Subgraph Queries
 1. Query in `retrieveActiveIndexers()` function
