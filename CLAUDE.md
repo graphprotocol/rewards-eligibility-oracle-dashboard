@@ -126,10 +126,16 @@ gh run list --branch main --limit 1   # wait for "completed success"
 # Generate the dashboard (fetches live data from contracts/subgraphs)
 python3 generate_dashboard.py
 
-# View the generated dashboard
-open output/index.html  # macOS
-# or open in browser directly
+# View the generated dashboard — it MUST be served over http
+python3 -m http.server 8799 --directory output
+open http://localhost:8799/
 ```
+
+**Do not `open output/index.html`.** The page hydrates from an ES module
+(`app.js`), and browsers refuse to load modules from a `file://` origin — CORS
+blocks it, so the markup renders but nothing is interactive. Copy buttons do
+nothing, filters do nothing, sorting does nothing, and none of it reports an
+error anywhere the reader will see. It looks like a working page.
 
 ### Environment Setup
 ```bash
@@ -328,6 +334,13 @@ ask for a component's real prop types and usage examples instead of guessing.
 scrolls horizontally on small screens, which is what GDS's `Table` is built to
 do. It used to be a table *plus* a duplicate card list for `max-md`, which
 rendered all 97 rows twice into every page.
+
+**The roster renders `VISIBLE_ROWS` (25) until "View all" is clicked**, so the
+criteria and oracle panels below it are reachable. Two consequences: the
+prerendered `index.html` contains 25 rows, not all of them (the rest live in the
+embedded JSON and appear on expand); and sorting is applied in `Roster` *before*
+truncating, then again by `Table.Body`, using the same `COMPARATORS`. Slicing
+first would make the table "25 arbitrary rows, then sorted".
 
 ### Updating Subgraph Queries
 1. Query in `retrieveActiveIndexers()` function

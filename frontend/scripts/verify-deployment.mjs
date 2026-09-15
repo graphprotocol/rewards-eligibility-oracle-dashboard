@@ -106,13 +106,17 @@ try {
   // Proves the client bundle loaded AND hydrated: a filter click must change
   // the rendered row count. The status filters are a GDS Chip.Group in radio
   // mode, so they expose role="radio", not role="button".
+  //
+  // The rendered row count is capped, so it is not a reliable signal — assert
+  // on the roster's own "Showing X of Y" line, which always reflects the
+  // filter.
+  const countLine = page.locator('#roster-count')
   let hydrated = false
   try {
-    const before = await page.locator('tbody tr').count()
+    const before = await countLine.innerText()
     await page.getByRole('radio', { name: /^Unqualified/ }).click()
     await page.waitForTimeout(600)
-    const after = await page.locator('tbody tr').count()
-    hydrated = after !== before || after === 0
+    hydrated = (await countLine.innerText()) !== before
   } catch {
     hydrated = false
   }
@@ -133,6 +137,19 @@ try {
     sortable = false
   }
   check(sortable, 'table sorting reorders the roster')
+
+  // The roster is truncated until asked to expand. If that link is broken the
+  // page silently publishes a partial answer, so prove it reveals the rest.
+  let expands = false
+  try {
+    const before = await page.locator('tbody tr').count()
+    await page.getByRole('button', { name: /^View all \d+ indexers/ }).click()
+    await page.waitForTimeout(400)
+    expands = (await page.locator('tbody tr').count()) > before
+  } catch {
+    expands = false
+  }
+  check(expands, '"View all" reveals the rest of the roster')
 
   await page.screenshot({ path: join(shotDir, 'desktop-full.png'), fullPage: true })
   await page.close()
