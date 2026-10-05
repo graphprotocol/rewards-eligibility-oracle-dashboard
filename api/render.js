@@ -22,26 +22,39 @@ import {
 } from '../frontend/dist-ssr/entry-server.js'
 
 /**
- * How long a rendered page may be served from the CDN. Matches the hourly cron,
- * so a visitor sees data at most one refresh behind. `stale-while-revalidate`
- * lets the refresh happen behind an instant response; `stale-if-error` is the
- * property that replaces the old renderer's "leave the previous index.html in
- * place" behaviour — if Blob or this function fails, the CDN keeps serving the
- * last good page rather than an error.
+ * How long a rendered page may be served from the CDN.
+ *
+ * Five minutes, not the cron's hour: a refresh can land at any point in the
+ * hour (a manual one after a deploy, say), and an hour-long entry pinned the
+ * page rendered just before it for that whole hour. A render is a few
+ * milliseconds, so re-rendering every five minutes costs nothing.
+ * `stale-while-revalidate` keeps responses instant while that happens;
+ * `stale-if-error` replaces the old renderer's "leave the previous index.html
+ * in place" behaviour — if Blob or this function fails, the CDN keeps serving
+ * the last good page rather than an error.
  */
 const CACHE_CONTROL =
-  'public, max-age=0, s-maxage=3600, stale-while-revalidate=3600, stale-if-error=86400'
+  'public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400'
 
-/** Cached across invocations on a warm instance, so a reused instance skips the fetch. */
+/**
+ * The parsed data.json, reused across invocations on a warm instance — but
+ * only while it is still the published one. Keyed on the blob's etag, which a
+ * cheap head() reads on every render. Without the key, a warm instance kept
+ * whatever data.json it first loaded for as long as it stayed warm, so a
+ * refresh never reached the page.
+ */
 let cached = null
 
 async function loadData() {
-  const { url } = await head('data.json')
-  const response = await fetch(url, { cache: 'no-store' })
+  const blob = await head('data.json')
+  if (cached?.etag === blob.etag) return cached.data
+  const response = await fetch(blob.url, { cache: 'no-store' })
   if (!response.ok) {
     throw new Error(`Fetching data.json failed: ${response.status} ${response.statusText}`)
   }
-  return parseDashboardData(await response.json())
+  const data = parseDashboardData(await response.json())
+  cached = { etag: blob.etag, data }
+  return data
 }
 
 /**
@@ -93,8 +106,8 @@ export default async function handler(request, response) {
   // Set by the /indexer/:address rewrite in vercel.json.
   const indexer = typeof request.query?.indexer === 'string' ? request.query.indexer : null
   try {
-    if (!cached) cached = await loadData()
-    const props = buildProps(cached, { now: Date.now(), indexer })
+    const data = await loadData()
+    const props = buildProps(data, { now: Date.now(), indexer })
     const html = renderDocument(props)
 
     response.setHeader('Content-Type', 'text/html; charset=utf-8')

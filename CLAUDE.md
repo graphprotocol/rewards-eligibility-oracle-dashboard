@@ -415,9 +415,12 @@ Renders **ahead of time**: `render_dashboard()` shells out to
 ### Vercel
 
 Renders **per request**: `api/render.js` runs the same SSR bundle over the
-`data.json` that `api/refresh.py` published to Blob, and caches the result for
-an hour. The two paths are verified byte-identical for the same data — if you
-change one, change the shared code in `frontend/src/lib/document.js` and
+`data.json` that `api/refresh.py` published to Blob. The CDN keeps a render
+for five minutes, and a warm function reuses the parsed data only while the
+blob's etag is unchanged, so a refresh reaches the page within minutes.
+
+The two paths are verified byte-identical for the same data — if you change
+one, change the shared code in `frontend/src/lib/document.js` and
 `entry-server.jsx`, never one caller alone.
 
 Why per request: a Vercel deployment is immutable, so an `index.html` baked at
