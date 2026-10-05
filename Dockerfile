@@ -51,8 +51,6 @@ ENV PATH=/root/.local/bin:$PATH
 
 # Copy application files
 COPY generate_dashboard.py .
-COPY telegram_bot.py .
-COPY telegram_notifier.py .
 COPY scheduler.py .
 COPY database.py .
 
@@ -60,10 +58,11 @@ COPY database.py .
 # fully self-contained, so there are no node_modules to install or ship.
 COPY --from=frontend-build /usr/local/bin/node /usr/local/bin/node
 
-# The renderer: a self-contained bundle plus the two small scripts that drive it.
+# The renderer: a self-contained bundle plus the one script that drives it.
+# prerender.mjs imports everything — data parsing, prop building, markup — from
+# the bundle, so no source files from frontend/src are needed at runtime.
 COPY --from=frontend-build /build/dist-ssr/entry-server.js /app/frontend/dist-ssr/entry-server.js
 COPY frontend/scripts/prerender.mjs /app/frontend/scripts/prerender.mjs
-COPY frontend/src/lib/data.js /app/frontend/src/lib/data.js
 
 # Built frontend assets (app.js + gds.css + Euclid Circular fonts) from the
 # frontend build. copy_gds_assets() places these in the output dir so Caddy

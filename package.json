@@ -1,0 +1,12 @@
+{
+  "name": "rewards-eligibility-oracle-dashboard",
+  "private": true,
+  "type": "module",
+  "description": "Vercel deployment manifest. The UI itself lives in frontend/ — this exists so api/render.js has its runtime dependency.",
+  "scripts": {
+    "build": "bash scripts/build_vercel.sh"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.0.0"
+  }
+}

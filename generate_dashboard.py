@@ -513,13 +513,6 @@ def get_rpc_manager() -> RoundRobinRPC:
         _rpc_manager = RoundRobinRPC()
     return _rpc_manager
 
-# Import telegram notifier (will be skipped if module not available)
-try:
-    import telegram_notifier
-    TELEGRAM_AVAILABLE = True
-except ImportError:
-    TELEGRAM_AVAILABLE = False
-
 
 def get_last_transaction_from_json(json_file: str = 'last_transaction.json') -> Optional[dict]:
     """Wrapper: now uses database instead of JSON file."""
@@ -1244,9 +1237,22 @@ def checkEligibility(contract_address: str, rpc_manager: Optional[RoundRobinRPC]
             if grace_buffer_cutoff and eligibility_renewal_time >= grace_buffer_cutoff:
                 # Indexer is eligible (within buffer period)
                 indexer["status"] = "eligible-active"
-                indexer["eligible_until"] = ""
-                indexer["eligible_until_readable"] = ""
-                indexer["eligible_until_short"] = ""
+                # An active indexer's eligibility lapses on exactly the same
+                # clock as a grace-period one: renewal + eligibility_period.
+                # Being renewed in the latest oracle update does not make that
+                # deadline go away, it just means it keeps being pushed back.
+                # Leaving it blank made the "Eligible until" column read
+                # "Not set" for every eligible indexer on the dashboard.
+                if eligibility_period and eligibility_renewal_time > 0:
+                    eligible_until = eligibility_renewal_time + eligibility_period
+                    dt_until = datetime.fromtimestamp(eligible_until, tz=timezone.utc)
+                    indexer["eligible_until"] = eligible_until
+                    indexer["eligible_until_readable"] = dt_until.strftime("%-d-%b-%Y at %H:%M:%S UTC")
+                    indexer["eligible_until_short"] = dt_until.strftime("%-d-%b-%Y")
+                else:
+                    indexer["eligible_until"] = ""
+                    indexer["eligible_until_readable"] = ""
+                    indexer["eligible_until_short"] = ""
                 # Update last_renewed_on_tx with current transaction hash when eligible
                 if transaction_hash:
                     indexer["last_renewed_on_tx"] = transaction_hash
@@ -1907,7 +1913,7 @@ def _write_atomic(path: str, content: str) -> None:
             os.unlink(tmp_path)
         raise
 
-def main() -> bool:
+def main(render: bool = True) -> bool:
     """
     Main function to generate the multi-environment dashboard.
 
@@ -2107,25 +2113,6 @@ def main() -> bool:
         print(f"✓ {env_key} stats: {environment_data[env_key]['stats']}")
         print()
 
-    # Send Telegram notifications (only once, using testnet data)
-    if TELEGRAM_AVAILABLE and 'testnet' in environment_data:
-        try:
-            print("Sending Telegram notifications...")
-            # Temporarily copy testnet data to default location for notifier
-            if os.path.exists('active_indexers_testnet.json'):
-                import shutil
-                shutil.copy('active_indexers_testnet.json', 'active_indexers.json')
-                if os.path.exists('active_indexers_testnet_previous_run.json'):
-                    shutil.copy('active_indexers_testnet_previous_run.json', 'active_indexers_previous_run.json')
-                telegram_notifier.send_notifications()
-            print()
-        except Exception as e:
-            print(f"⚠ Warning: Could not send Telegram notifications: {e}")
-            print()
-    else:
-        print("ℹ️ Telegram notifications disabled (module not available)")
-        print()
-
     # Generate HTML with all environment data
     print("=" * 70)
     print("Generating HTML dashboard...")
@@ -2150,11 +2137,19 @@ def main() -> bool:
     os.makedirs(output_dir, exist_ok=True)
 
     write_dashboard_data(environment_data, output_dir)
-    copy_gds_assets(output_dir)
-    # A failed render leaves the previous index.html in place, so the data is
-    # fresh but what visitors see is not. That is a failed run as far as the
-    # caller is concerned, even though serving stale HTML beats serving none.
-    rendered = render_dashboard(output_dir)
+
+    if render:
+        copy_gds_assets(output_dir)
+        # A failed render leaves the previous index.html in place, so the data is
+        # fresh but what visitors see is not. That is a failed run as far as the
+        # caller is concerned, even though serving stale HTML beats serving none.
+        rendered = render_dashboard(output_dir)
+    else:
+        # The serverless path (api/refresh.py) produces data.json only: the page
+        # is rendered per request from it, and the static assets ship with the
+        # deployment. There is no index.html here that could go stale, so the
+        # run's success is decided by the data alone.
+        rendered = True
 
     # Log execution time
     end_time = datetime.now(timezone.utc)

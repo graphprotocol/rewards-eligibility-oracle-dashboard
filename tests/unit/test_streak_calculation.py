@@ -136,7 +136,7 @@ class TestCalculateContinuousStreak:
         """Test streak calculation for indexer with single eligible period."""
         # Create a status change from 5 days ago to now
         five_days_ago = int(datetime(2025, 2, 11, 7, 0, 0).timestamp())
-        one_day_ago = int(datetime(2025, 2, 11, 12, 0, 0).timestamp()
+        one_day_ago = int(datetime(2025, 2, 11, 12, 0, 0).timestamp())
 
         # Log status changes
         log_status_change(
@@ -176,7 +176,7 @@ class TestCalculateContinuousStreak:
         # Create status changes spanning 3 days
         three_days_ago = int(datetime(2025, 2, 11, 9, 0, 0).timestamp())
         two_days_ago = int(datetime(2025, 2, 11, 10, 0, 0).timestamp())
-        one_day_ago = int(datetime(2025, 2, 11, 11, 0, 0).timestamp()
+        one_day_ago = int(datetime(2025, 2, 11, 11, 0, 0).timestamp())
 
         # Log status changes
         log_status_change(
@@ -222,8 +222,8 @@ class TestCalculateContinuousStreak:
     def test_streak_resets_on_ineligible(self, clean_db, sample_address):
         """Test that streak resets to 0 when hitting ineligible status."""
         # Create a status changes with an ineligible period
-        five_days_ago = int(datetime(2025, 2, 11, 9, 0, 0).timestamp()
-        three_days_ago = int(datetime(2025, 2, 11, 8, 0, 0).timestamp()
+        five_days_ago = int(datetime(2025, 2, 11, 9, 0, 0).timestamp())
+        three_days_ago = int(datetime(2025, 2, 11, 8, 0, 0).timestamp())
 
         # Log status changes
         log_status_change(
@@ -269,7 +269,7 @@ class TestIntegration:
         # 2. Transitions to grace (1 day ago)
         # 3. Then calculate streak
 
-        four_days_ago = int(datetime(2025, 2, 11, 8, 0, 0).timestamp()
+        four_days_ago = int(datetime(2025, 2, 11, 8, 0, 0).timestamp())
 
         # Log status changes
         log_status_change(

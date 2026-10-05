@@ -104,18 +104,52 @@ try {
   check(criteria, 'eligibility criteria section present')
 
   // Proves the client bundle loaded AND hydrated: a filter click must change
-  // the rendered row count.
+  // the rendered row count. The status filters are a GDS Chip.Group in radio
+  // mode, so they expose role="radio", not role="button".
+  //
+  // The rendered row count is capped, so it is not a reliable signal — assert
+  // on the roster's own "Showing X of Y" line, which always reflects the
+  // filter.
+  const countLine = page.locator('#roster-count')
   let hydrated = false
   try {
-    const before = await page.locator('tbody tr').count()
-    await page.getByRole('button', { name: /^Unqualified/ }).click()
+    const before = await countLine.innerText()
+    await page.getByRole('radio', { name: /^Unqualified/ }).click()
     await page.waitForTimeout(600)
-    const after = await page.locator('tbody tr').count()
-    hydrated = after !== before || after === 0
+    hydrated = (await countLine.innerText()) !== before
   } catch {
     hydrated = false
   }
   check(hydrated, 'client bundle hydrated (filter changes the table)')
+
+  // Sorting is the Table's own, so prove the header buttons are wired up: the
+  // first row must change when the roster is re-sorted by name.
+  let sortable = false
+  try {
+    // Back to the full roster — the filter above may well have emptied it.
+    await page.getByRole('radio', { name: /^All/ }).click()
+    await page.waitForTimeout(400)
+    const before = await page.locator('tbody tr').first().innerText()
+    await page.getByRole('button', { name: /^Indexer/ }).click()
+    await page.waitForTimeout(400)
+    sortable = (await page.locator('tbody tr').first().innerText()) !== before
+  } catch {
+    sortable = false
+  }
+  check(sortable, 'table sorting reorders the roster')
+
+  // The roster is truncated until asked to expand. If that link is broken the
+  // page silently publishes a partial answer, so prove it reveals the rest.
+  let expands = false
+  try {
+    const before = await page.locator('tbody tr').count()
+    await page.getByRole('button', { name: /^View all \d+ indexers/ }).click()
+    await page.waitForTimeout(400)
+    expands = (await page.locator('tbody tr').count()) > before
+  } catch {
+    expands = false
+  }
+  check(expands, '"View all" reveals the rest of the roster')
 
   await page.screenshot({ path: join(shotDir, 'desktop-full.png'), fullPage: true })
   await page.close()
@@ -123,12 +157,20 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } })
   await mobile.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60_000 })
   await mobile.waitForTimeout(1500)
-  const cards = await mobile.locator('ul > li').count()
-  const overflow = await mobile.evaluate(
-    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-  )
-  check(cards > 0, 'mobile renders indexer cards', `${cards} cards`)
+  // There is no separate mobile rendering any more: the GDS Table scrolls
+  // horizontally inside itself. So the roster must still have rows, the page
+  // must not overflow, and the table must be the thing that scrolls.
+  const mobileRows = await mobile.locator('tbody tr').count()
+  const { overflow, tableScrolls } = await mobile.evaluate(() => {
+    const table = document.querySelector('table')?.closest('.gds-table')
+    return {
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      tableScrolls: table ? table.scrollWidth > table.clientWidth + 1 : false,
+    }
+  })
+  check(mobileRows > 0, 'mobile renders roster rows', `${mobileRows} rows`)
   check(!overflow, 'no horizontal overflow at 390px')
+  check(tableScrolls, 'the table itself scrolls horizontally on mobile')
   await mobile.screenshot({ path: join(shotDir, 'mobile.png'), fullPage: false })
   await mobile.close()
 } finally {

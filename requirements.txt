@@ -9,12 +9,7 @@ python-dotenv>=1.0.0
 # Cryptography for keccak256 hashing (contract function selectors)
 pycryptodome>=3.19.0
 
-# Telegram Bot API for notifications
-python-telegram-bot==20.7
-
-# Web server for authentication gateway
-bottle>=0.12.25
-
-# Scheduler for periodic dashboard generation
-schedule>=1.2.0
-
+# Vercel Blob, for round-tripping run-to-run state on a serverless host.
+# storage.py imports this lazily and only when BLOB_READ_WRITE_TOKEN is set, so
+# it is never loaded by the Docker image or a local run.
+vercel>=0.3.4

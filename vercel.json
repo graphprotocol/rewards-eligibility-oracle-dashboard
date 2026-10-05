@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "bash scripts/build_vercel.sh",
+  "outputDirectory": "public",
+  "framework": null,
+  "functions": {
+    "api/refresh.py": {
+      "maxDuration": 600,
+      "excludeFiles": "{tests/**,docs/**,frontend/node_modules/**,frontend/src/**,frontend/css/**,output/**,verification-shots/**,*.md,*.db,active_indexers*.json,activity_log*.json}"
+    },
+    "api/render.js": {
+      "maxDuration": 30
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/refresh",
+      "schedule": "0 * * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/render"
+    }
+  ]
+}

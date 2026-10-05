@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "last_check": "2026-08-03 18:42:42 UTC",
-    "last_oracle_update_time": 1785751237
+    "last_check": "2026-09-15 19:41:21 UTC",
+    "last_oracle_update_time": 1789466417
   },
   "status_changes": [
     {
@@ -87,6 +87,48 @@
       "previous_status": "eligible-active",
       "new_status": "ineligible-unqualified",
       "date_status_change": "2026-08-03"
+    },
+    {
+      "address": "0x17def1a43a323c711c7a32101ecf41e58eff54a2",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-09-15"
+    },
+    {
+      "address": "0x32bbd16a94ebb289edceebe77f35acc82664157b",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-09-15"
+    },
+    {
+      "address": "0x5af569b692b0598721461027dbbecde74d465d99",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-09-15"
+    },
+    {
+      "address": "0x605d0b92cde1e110d5ae9123969097ea2489d1aa",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-09-15"
+    },
+    {
+      "address": "0xc9014686f6336ad558b539565d5dff840b339082",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-09-15"
+    },
+    {
+      "address": "0xf00f7157fa8fd0420b87956d46058a16b2f23adc",
+      "previous_status": "eligible-active",
+      "new_status": "ineligible-unqualified",
+      "date_status_change": "2026-09-15"
+    },
+    {
+      "address": "0xfeff9093f6b32d0e5cddba743b06a1fedb87c004",
+      "previous_status": "ineligible-unqualified",
+      "new_status": "eligible-active",
+      "date_status_change": "2026-09-15"
     }
   ]
 }

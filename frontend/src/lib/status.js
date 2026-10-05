@@ -36,12 +36,23 @@ export const STATUS_META = {
   },
 }
 
+/**
+ * Default roster order: the states that need someone to act come first, the
+ * healthy majority last. Reading the top of the table should be the same act as
+ * asking "who is in trouble".
+ */
 export const STATUS_ORDER = [
   'eligible-grace',
   'ineligible-expired',
   'ineligible-unqualified',
   'eligible-active',
 ]
+
+/** Sort key for STATUS_ORDER; unknown statuses sort last rather than first. */
+export function statusRank(status) {
+  const index = STATUS_ORDER.indexOf(status)
+  return index === -1 ? STATUS_ORDER.length : index
+}
 
 export function statusMeta(status) {
   return STATUS_META[status] ?? {
