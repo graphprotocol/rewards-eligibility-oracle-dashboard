@@ -38,4 +38,4 @@ export function renderDocument(props) {
  */
 export { theGraphLogo } from './lib/logo.js'
 export { parseDashboardData } from './lib/data.js'
-export { buildProps, NoDataError, VERSION } from './lib/document.js'
+export { buildProps, NoDataError, IndexerNotFoundError, indexerPath, VERSION } from './lib/document.js'

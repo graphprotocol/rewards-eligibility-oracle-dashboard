@@ -22,6 +22,14 @@
     {
       "source": "/",
       "destination": "/api/render"
+    },
+    {
+      "source": "/indexer/:address/",
+      "destination": "/api/render?indexer=:address"
+    },
+    {
+      "source": "/indexer/:address",
+      "destination": "/api/render?indexer=:address"
     }
   ]
 }

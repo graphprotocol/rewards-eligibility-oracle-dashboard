@@ -232,14 +232,23 @@ The dashboard supports multiple contract deployments simultaneously:
   - `checkEligibility()` - Three-pass contract interaction
   - `updateStatusChangeDates()` - Compares runs to detect changes
   - `logStatusChanges()` - Appends to cumulative activity log
+  - `fetch_indexer_metrics()` - Reads the window's daily metrics from the metrics subgraph
+  - `fetch_eligibility_criteria()` - Active criteria, plus `upcoming` changes parsed
+    from the doc's "Upcoming" table (`changes` only when the prose is unambiguous)
   - `write_dashboard_data()` - Writes `output/data.json`, the contract with the frontend
   - `render_dashboard()` - Shells out to the Node prerenderer (non-fatal on failure)
 
 - **`frontend/`** - Presentation layer: React + The Graph Design System, prerendered
-  - `src/App.jsx` - The page. Two surfaces: indexer self-lookup, then the oracle roster
+  - `src/App.jsx` - The page. Two surfaces: indexer self-lookup, then the oracle roster.
+    Renders `IndexerPage` instead when `props.view === 'indexer'`
+  - `src/IndexerPage.jsx` - One indexer: verdict, day strip, simulator, daily table
+  - `src/components/metrics.jsx` - Day cells, strips, online-days meter, `Notice`
   - `src/lib/status.js` - Eligibility domain logic (status → GDS variant, grace countdown)
+  - `src/lib/metrics.js` - Metrics domain logic: day states, failure reasons,
+    next-run forecast, pending-criteria impact. Pure; runs on server and client
   - `src/lib/data.js` - Reads `output/data.json`; the frontend reads nothing else
-  - `scripts/prerender.mjs` - Renders `output/index.html` atomically
+  - `scripts/prerender.mjs` - Renders `output/index.html` and one
+    `output/indexer/<address>/index.html` per indexer, atomically
   - `scripts/verify-deployment.mjs` - The frontend test. Drives a real browser
   - `css/entry.css` - Tailwind/GDS entry point. Nothing hand-written belongs here
 
@@ -266,7 +275,7 @@ The dashboard supports multiple contract deployments simultaneously:
 
 - **`env.example`** - Template for `.env` configuration
   - Required: `ARBISCAN_API_KEY`, `GRAPH_API_KEY`, `RPC_ENDPOINT`
-  - Optional: `USE_CACHED_ENS`
+  - Optional: `USE_CACHED_ENS`, `REO_METRICS_SUBGRAPH_ID`
   - Vercel only: `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET`
   - Manual environment config: `TESTNET_NEW_CONTRACT_ADDRESS`, `TESTNET_NEW_DEPLOYMENT_BLOCK`
 
@@ -342,10 +351,42 @@ embedded JSON and appear on expand); and sorting is applied in `Roster` *before*
 truncating, then again by `Table.Body`, using the same `COMPARATORS`. Slicing
 first would make the table "25 arbitrary rows, then sorted".
 
+### Daily metrics and indexer pages
+
+The contract says *whether* an indexer is eligible; the
+[metrics subgraph](https://github.com/graphprotocol/rewards-eligibility-oracle-subgraph)
+says *why*. `fetch_indexer_metrics()` reads the current window's `IndexerDay`
+rows into the Arbitrum One environment's `metrics` block in `data.json`
+(positional rows, see `METRICS_COLUMNS`). It never fails a run: on any error it
+returns null and the page renders from the contract alone, as before.
+
+Rules the frontend must keep (they come from how the oracle publishes):
+
+- **A window day with no `Day` entity is unknown, not zero.** It is drawn as
+  "No data published". Publishing began 2026-09-29, so until the window fills
+  most days are unknown, and any forecast short of renewal reads "Not enough
+  data" rather than "Won't be renewed".
+- **Within a published day, a missing row means not routed.**
+- **`failed_*` counters overlap.** Use the largest to name the problem; never sum them.
+- **Pending criteria come from `ELIGIBILITY_CRITERIA.md`, not the chain.** Only
+  `MIN_SUBGRAPHS` can be re-judged exactly from the counters, so it is the only
+  pending change applied. While the window is not fully published, the banner
+  says it is too early to tell who a change affects, and the "Affected" filter
+  is hidden.
+
+**Indexer pages live at `indexer/<address>/`** and embed that indexer only.
+They set `<base href="../../">` so assets and links resolve to the dashboard
+root whether it is `/` (Vercel) or `/reo/` (Caddy). That only works from a URL
+ending in `/`; an inline script adds a missing slash, and `verify-deployment.mjs`
+checks both spellings. Vercel serves them through the `/indexer/:address`
+rewrite to `api/render.js`; the prerenderer deletes pages for indexers that
+have left every roster.
+
 ### Updating Subgraph Queries
 1. Query in `retrieveActiveIndexers()` function
 2. Network subgraph: `DZz4kDTdmzWLWsV373w2bSmoar3umKKH9y82SUKr5qmp`
 3. ENS subgraph: `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`
+4. Metrics subgraph: `J5sHNptu4EknmoS9vBk69dZ8bRtPSqLLrMdQvkLces3r` (`fetch_indexer_metrics()`)
 
 ### Debugging Contract Calls
 1. Check `active_indexers.json` for raw data
@@ -388,7 +429,7 @@ and resurrect exactly that bug.
 **Setup, once:**
 
 1. Import the repo as a Vercel project. `vercel.json` supplies the build command,
-   output directory, cron, and the `/` → `/api/render` rewrite.
+   output directory, cron, and the `/` and `/indexer/:address` → `/api/render` rewrites.
 2. Create a Blob store and connect it to the project (sets `BLOB_READ_WRITE_TOKEN`).
 3. Set `CRON_SECRET` to a random 16+ character string. **`api/refresh.py` fails
    closed** — with no secret set, every request is denied, including the cron's.

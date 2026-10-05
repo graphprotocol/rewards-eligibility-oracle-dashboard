@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Address,
   Button,
-  ButtonGroup,
   Card,
   Chip,
   DescriptionList,
@@ -22,12 +21,22 @@ import {
   ClipboardTextIcon,
   ClockIcon,
   GaugeIcon,
-  ListChecksIcon,
   MagnifyingGlassIcon,
   TheGraphLogoIcon,
 } from '@graphprotocol/gds-react/icons'
 
-import { statusMeta, statusDetail, statusRank, explorerChain, arbiscanBase } from './lib/status.js'
+import { IndexerPage } from './IndexerPage.jsx'
+import { MiniStrip, Notice, OnlineMeter, StripLegend } from './components/metrics.jsx'
+import { indexerPath } from './lib/document.js'
+import {
+  DAY_SECONDS,
+  FORECAST_RANK,
+  analyzeIndexer,
+  dayFromIso,
+  pendingChange,
+  shortDay,
+} from './lib/metrics.js'
+import { statusMeta, statusDetail, statusRank, arbiscanBase } from './lib/status.js'
 import { summarize } from './lib/summary.js'
 import { formatUTC, relativeAge, daysSince } from './lib/time.js'
 
@@ -64,10 +73,6 @@ const DEFAULT_STATUS_FILTER = 'eligible-active'
  */
 const VISIBLE_ROWS = 25
 
-function explorerUrl(indexer, env) {
-  return `https://thegraph.com/explorer/profile/${indexer.address}?view=Indexing&chain=${explorerChain(env.networkId)}`
-}
-
 /**
  * The page answers three questions, in the order someone actually asks them:
  *
@@ -86,6 +91,7 @@ function explorerUrl(indexer, env) {
  * this file follows.
  */
 export function App({
+  view = 'roster',
   environments,
   activeId,
   generatedAt,
@@ -107,9 +113,9 @@ export function App({
     const indexer = params.get('indexer')
     const status = params.get('status')
     if (network && environments.some((e) => e.id === network)) setNetworkId(network)
-    if (indexer) setQuery(indexer)
+    if (indexer && view === 'roster') setQuery(indexer)
     if (status) setStatusFilter(status)
-  }, [environments])
+  }, [environments, view])
 
   const active = environments.find((e) => e.id === networkId) ?? environments[0]
 
@@ -123,17 +129,28 @@ export function App({
   return (
     <GDSProvider persistTheme="localStorage">
       <div className="flex min-h-screen flex-col bg-canvas text-default">
-        <Button
-          href="#roster-heading"
-          size="small"
-          className="sr-only focus:not-sr-only focus:absolute focus:inset-s-4 focus:top-4 focus:z-50"
-        >
-          Skip to indexer list
-        </Button>
+        {view === 'roster' && (
+          <Button
+            href="#roster-heading"
+            size="small"
+            className="sr-only focus:not-sr-only focus:absolute focus:inset-s-4 focus:top-4 focus:z-50"
+          >
+            Skip to indexer list
+          </Button>
+        )}
 
         <Masthead environments={environments} active={active} onSelect={selectNetwork} />
 
         <main className="mx-auto flex w-full max-w-288 flex-1 flex-col gap-8 px-4 py-10 md:px-8">
+          {view === 'indexer' ? (
+            <IndexerPage
+              env={active}
+              criteria={criteria}
+              now={now}
+              rootHref={networkId === activeId ? './' : `./?network=${networkId}`}
+            />
+          ) : (
+          <>
           <div className="grid items-center gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-2">
               <h1 className="text-32 font-medium">Rewards Eligibility Oracle</h1>
@@ -145,10 +162,19 @@ export function App({
             <OracleFreshness env={active} now={now} />
           </div>
 
+          <UpcomingCriteria
+            upcoming={criteria?.upcoming}
+            env={active}
+            now={now}
+            onShowAffected={() => setStatusFilter('affected')}
+          />
+
           <IndexerLookup env={active} query={query} onQuery={setQuery} now={now} />
 
           <Roster
             env={active}
+            criteria={criteria}
+            linkSuffix={networkId === activeId ? '' : `?network=${networkId}`}
             now={now}
             query={query}
             statusFilter={statusFilter}
@@ -177,6 +203,8 @@ export function App({
             />
             <OracleDetails env={active} now={now} />
           </div>
+          </>
+          )}
         </main>
 
         <SiteFooter
@@ -343,7 +371,6 @@ function IndexerLookup({ env, query, onQuery, now }) {
 function IndexerVerdict({ indexer, env, now }) {
   const meta = statusMeta(indexer.status)
   const detail = statusDetail(indexer, env.eligibilityPeriod, now)
-  const href = explorerUrl(indexer, env)
 
   // Card pads itself (24px). Anything that adds `p-6` in here is doubling it.
   return (
@@ -359,25 +386,23 @@ function IndexerVerdict({ indexer, env, now }) {
 
           <div className="flex flex-col gap-1">
             {indexer.ens_name && <span className="text-20 font-medium">{indexer.ens_name}</span>}
-            {/* Copy only — "View on Explorer" below is the link, and an Address
-                that is both silently overlays one on the other. `copy` is left
-                at its default: it is the only mode in which Address exposes its
-                own text to a screen reader. */}
+            {/* Copy only, no link: the indexer's page (below) has the Explorer
+                and Arbiscan links. `copy` is left at its default: it is the
+                only mode in which Address exposes its own text to a screen
+                reader. */}
             <Address address={indexer.address} />
           </div>
 
           <p className="text-14">{meta.summary}</p>
 
-          <ButtonGroup size="small" className="mt-auto">
-            <Button href={href} addonAfter={ArrowSquareOutIcon}>
-              View on Explorer
-            </Button>
-            {/* Points at the criteria already on this page, not off-site: the
-                answer to "why am I in this state" is further down. */}
-            <Button href="#criteria-heading" addonBefore={ListChecksIcon}>
-              How eligibility is decided
-            </Button>
-          </ButtonGroup>
+          <Button
+            size="small"
+            href={`${indexerPath(indexer.address)}?network=${env.id}`}
+            addonAfter={ArrowRightInteractiveIcon}
+            className="mt-auto"
+          >
+            View details
+          </Button>
         </div>
 
         <DescriptionList size="small">
@@ -408,18 +433,30 @@ const COMPARATORS = {
   renewed: (a, b) =>
     (Number(a.eligibility_renewal_time) || 0) - (Number(b.eligibility_renewal_time) || 0),
   until: (a, b) => (Number(a.eligible_until) || 0) - (Number(b.eligible_until) || 0),
+  // Only present when the network has daily metrics (rows then carry `_a`).
+  online: (a, b) => (a._a?.online ?? -1) - (b._a?.online ?? -1),
+  next: (a, b) => (FORECAST_RANK[a._a?.forecast.key] ?? 9) - (FORECAST_RANK[b._a?.forecast.key] ?? 9),
 }
 
 /** Surface 2 — where everyone stands. */
-function Roster({ env, now, query, statusFilter, onStatusFilter, sort, onSort, onReset }) {
+function Roster({ env, criteria, linkSuffix, now, query, statusFilter, onStatusFilter, sort, onSort, onReset }) {
   const [showAll, setShowAll] = useState(false)
 
+  // Each row carries its metrics analysis as `_a` when the network has metrics,
+  // so the comparators and the filter can read it.
+  const { rows: enriched, pending } = useMemo(() => rosterRows(env, criteria), [env, criteria])
+  const metrics = env.metrics
+
   // Hooks must run unconditionally, so these precede the early return.
-  const counts = useMemo(() => summarize(env.indexers), [env])
+  const counts = useMemo(
+    () => ({ ...summarize(env.indexers), affected: enriched.filter((r) => r._a?.affected).length }),
+    [env, enriched],
+  )
   const ordered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    let list = env.indexers
-    if (statusFilter !== 'all') list = list.filter((i) => i.status === statusFilter)
+    let list = enriched
+    if (statusFilter === 'affected') list = list.filter((i) => i._a?.affected)
+    else if (statusFilter !== 'all') list = list.filter((i) => i.status === statusFilter)
     if (q.length >= 3) {
       list = list.filter(
         (i) => i.address.toLowerCase().includes(q) || (i.ens_name ?? '').toLowerCase().includes(q),
@@ -428,7 +465,7 @@ function Roster({ env, now, query, statusFilter, onStatusFilter, sort, onSort, o
     const compare = COMPARATORS[sort.column] ?? COMPARATORS.status
     const direction = sort.order === 'asc' ? 1 : -1
     return [...list].sort((a, b) => direction * compare(a, b))
-  }, [env, query, statusFilter, sort])
+  }, [enriched, query, statusFilter, sort])
 
   if (!env.available) return <NoNetworkData env={env} />
 
@@ -442,7 +479,16 @@ function Roster({ env, now, query, statusFilter, onStatusFilter, sort, onSort, o
       </h2>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <StatusFilter counts={counts} value={statusFilter} onChange={onStatusFilter} />
+        <StatusFilter
+          counts={counts}
+          value={statusFilter}
+          onChange={onStatusFilter}
+          affectedLabel={
+            pending &&
+            metrics.publishedDays.length === metrics.windowEnd - metrics.windowStart + 1 &&
+            `Affected ${shortDay(pending.effectiveDay)}`
+          }
+        />
         {/* Both numbers move: the first is what is on screen, the second is
             what the filter matched. Saying "of 97" while a filter is active
             would describe a roster the reader is not looking at. */}
@@ -472,13 +518,30 @@ function Roster({ env, now, query, statusFilter, onStatusFilter, sort, onSort, o
               <Table.HeaderCell name="status" sortable={{ comparator: COMPARATORS.status }}>
                 Status
               </Table.HeaderCell>
-              <Table.HeaderCell
-                name="renewed"
-                align="end"
-                sortable={{ comparator: COMPARATORS.renewed, defaultOrder: 'desc' }}
-              >
-                Last renewed
-              </Table.HeaderCell>
+              {metrics ? (
+                <>
+                  <Table.HeaderCell
+                    name="online"
+                    sortable={{ comparator: COMPARATORS.online, defaultOrder: 'desc' }}
+                  >
+                    Online days
+                  </Table.HeaderCell>
+                  <Table.HeaderCell name="window">
+                    Last {metrics.windowEnd - metrics.windowStart + 1} days
+                  </Table.HeaderCell>
+                  <Table.HeaderCell name="next" sortable={{ comparator: COMPARATORS.next }}>
+                    Next run
+                  </Table.HeaderCell>
+                </>
+              ) : (
+                <Table.HeaderCell
+                  name="renewed"
+                  align="end"
+                  sortable={{ comparator: COMPARATORS.renewed, defaultOrder: 'desc' }}
+                >
+                  Last renewed
+                </Table.HeaderCell>
+              )}
               <Table.HeaderCell
                 name="until"
                 align="end"
@@ -488,9 +551,13 @@ function Roster({ env, now, query, statusFilter, onStatusFilter, sort, onSort, o
               </Table.HeaderCell>
             </Table.Header>
             <Table.Body rows={rows} getRowKey={(indexer) => indexer.address}>
-              {(indexer) => <IndexerRow indexer={indexer} env={env} now={now} />}
+              {(indexer) => (
+                <IndexerRow indexer={indexer} env={env} now={now} linkSuffix={linkSuffix} pending={pending} />
+              )}
             </Table.Body>
           </Table>
+
+          {metrics && <StripLegend minOnlineDays={metrics.criteria.minOnlineDays} />}
 
           {hidden > 0 && (
             // The rare sanctioned case for a Link without an href: an action
@@ -510,14 +577,16 @@ function Roster({ env, now, query, statusFilter, onStatusFilter, sort, onSort, o
   )
 }
 
-function StatusFilter({ counts, value, onChange }) {
+function StatusFilter({ counts, value, onChange, affectedLabel }) {
   const options = [
     { id: 'all', label: 'All', count: counts.total },
     { id: 'eligible-grace', label: 'Grace', count: counts['eligible-grace'] },
     { id: 'ineligible-expired', label: 'Expired', count: counts['ineligible-expired'] },
     { id: 'eligible-active', label: 'Eligible', count: counts['eligible-active'] },
     { id: 'ineligible-unqualified', label: 'Unqualified', count: counts['ineligible-unqualified'] },
-  ]
+    // Only while a criteria change is pending and the metrics can say who it hits.
+    affectedLabel && { id: 'affected', label: affectedLabel, count: counts.affected, variant: 'warning' },
+  ].filter(Boolean)
 
   return (
     <Chip.Group type="radio" aria-label="Filter by status" value={value} onValueChange={onChange}>
@@ -529,7 +598,9 @@ function StatusFilter({ counts, value, onChange }) {
           // no number reads as "unknown" rather than "nobody is in grace".
           count={String(option.count)}
           addonBefore={
-            option.id === 'all' ? undefined : <Status variant={statusMeta(option.id).variant} />
+            option.id === 'all' ? undefined : (
+              <Status variant={option.variant ?? statusMeta(option.id).variant} />
+            )
           }
         >
           {option.label}
@@ -539,40 +610,148 @@ function StatusFilter({ counts, value, onChange }) {
   )
 }
 
-function IndexerRow({ indexer, env, now }) {
+function IndexerRow({ indexer, env, now, linkSuffix, pending }) {
   const meta = statusMeta(indexer.status)
   const detail = statusDetail(indexer, env.eligibilityPeriod, now)
+  const metrics = env.metrics
+  const a = indexer._a
 
   return (
-    <Table.Row>
+    // The whole row opens the indexer's page. Table renders the link in the
+    // first cell, so nothing in that cell may be interactive itself: Address
+    // gets no href and no copy button. Address hides its own text from screen
+    // readers, hence the sr-only name, without which every row is an unnamed
+    // link.
+    <Table.Row href={`${indexerPath(indexer.address)}${linkSuffix}`}>
       <Table.Cell>
-        {/* Address handles truncation, the identicon and the friendly name.
-            `copy={false}` because the row already links to the Explorer and a
-            copy button inside a link is a nested interactive element.
-
-            The explicit `aria-label` is not redundant: Address marks its own
-            text `aria-hidden` and display:nones the duplicate unless
-            `copy="auto"`, so without this every row is an unnamed link and the
-            one column that identifies the row is invisible to a screen reader. */}
-        <Address
-          address={indexer.address}
-          href={explorerUrl(indexer, env)}
-          copy={false}
-          aria-label={`${indexer.ens_name || indexer.address} — view on Explorer`}
-        >
+        <Address address={indexer.address} copy={false}>
           {indexer.ens_name || undefined}
         </Address>
+        <span className="sr-only">{indexer.ens_name || indexer.address}</span>
       </Table.Cell>
       <Table.Cell>
-        {/* The badge explains itself, so no detached legend card is needed. */}
+        {/* The badge explains itself, so no detached legend card is needed.
+            With metrics, "Next run" says what happens next, so only Grace
+            keeps its countdown: there it is the number that matters. */}
         <Status variant={meta.variant}>
           {meta.label}
-          {detail ? ` · ${detail}` : ''}
+          {detail && (!metrics || indexer.status === 'eligible-grace') ? ` · ${detail}` : ''}
         </Status>
       </Table.Cell>
-      <Table.Cell>{indexer.eligibility_renewal_time_short || 'Never'}</Table.Cell>
+      {metrics ? (
+        <>
+          <Table.Cell>
+            {a.inSubgraph ? (
+              <OnlineMeter
+                a={a}
+                windowDays={a.days.length}
+                minOnlineDays={metrics.criteria.minOnlineDays}
+                pending={pending}
+              />
+            ) : (
+              <span className="text-14 text-muted">No query data</span>
+            )}
+          </Table.Cell>
+          <Table.Cell>
+            <MiniStrip days={a.days} />
+          </Table.Cell>
+          <Table.Cell>
+            <Status variant={a.forecast.variant}>{a.forecast.label}</Status>
+          </Table.Cell>
+        </>
+      ) : (
+        <Table.Cell>{indexer.eligibility_renewal_time_short || 'Never'}</Table.Cell>
+      )}
       <Table.Cell>{indexer.eligible_until_short || 'Not set'}</Table.Cell>
     </Table.Row>
+  )
+}
+
+/** Roster rows, each carrying its metrics analysis as `_a` when there are metrics. */
+function rosterRows(env, criteria) {
+  const metrics = env.metrics
+  if (!metrics) return { rows: env.indexers, pending: null }
+  const pending = pendingChange(criteria?.upcoming, metrics)
+  const periodDays = env.eligibilityPeriod ? Math.round(env.eligibilityPeriod / DAY_SECONDS) : null
+  return {
+    rows: env.indexers.map((i) => ({ ...i, _a: analyzeIndexer(i, metrics, pending, periodDays) })),
+    pending,
+  }
+}
+
+/**
+ * Criteria changes announced in ELIGIBILITY_CRITERIA.md. An announcement, not
+ * on-chain state: the text is shown as written, and the "who is affected"
+ * count only when the new threshold could be read out of it and the network has
+ * metrics to apply it to.
+ */
+function UpcomingCriteria({ upcoming, env, now, onShowAffected }) {
+  const today = Math.floor(now / 1000 / DAY_SECONDS)
+  const rows = (upcoming ?? []).filter((row) => dayFromIso(row.effective_date) >= today)
+  const { rows: enriched, pending } = useMemo(() => rosterRows(env, { upcoming }), [env, upcoming])
+  if (rows.length === 0) return null
+
+  const affected = enriched.filter((r) => r._a?.affected).length
+  // Until the whole window is published, a shortfall under the new rule may be
+  // made up by days nobody can see yet. Saying "nobody is affected" then would
+  // be false reassurance.
+  const metrics = env.metrics
+  const published = metrics?.publishedDays.length ?? 0
+  const span = metrics ? metrics.windowEnd - metrics.windowStart + 1 : 0
+  const tooEarly = Boolean(metrics) && published < span
+
+  return (
+    <div className="flex flex-col gap-4">
+      {rows.map((row) => {
+        const day = dayFromIso(row.effective_date)
+        const when = day === today ? 'today' : day === today + 1 ? 'tomorrow' : `on ${shortDay(day)}`
+        const counted = pending && dayFromIso(pending.effective_date) === day
+        return (
+          <Notice
+            key={row.effective_date + row.label}
+            tone="warning"
+            title={`${row.label || 'Eligibility criteria'} change scheduled ${when}${when.startsWith('on') ? '' : `, ${shortDay(day)}`}`}
+            action={
+              counted && !tooEarly && affected > 0 ? (
+                <Button
+                  size="small"
+                  href="#roster-heading"
+                  onClick={onShowAffected}
+                  addonAfter={ArrowRightInteractiveIcon}
+                >
+                  Show the {affected} affected
+                </Button>
+              ) : undefined
+            }
+          >
+            <span className="flex flex-col gap-2">
+              <span>{row.summary}</span>
+              {counted && tooEarly && (
+                <span className="text-default">
+                  Only {published} of the window’s {span} days have been published to the metrics
+                  subgraph, too few yet to say which indexers it affects. Each indexer’s page shows
+                  how its published days fare under the new rule.
+                </span>
+              )}
+              {counted && !tooEarly && (
+                <span className="text-default">
+                  {affected === 0
+                    ? 'No indexer renewing under today’s rule would lose its renewal under the new one.'
+                    : `${affected} ${affected === 1 ? 'indexer' : 'indexers'} renewing under today’s rule would not be renewed under the new one. Current eligibility still runs its full period.`}
+                </span>
+              )}
+              <span>
+                Announced in the{' '}
+                <Link href="https://github.com/graphprotocol/rewards-eligibility-oracle/blob/main/ELIGIBILITY_CRITERIA.md#upcoming-eligibility-criteria">
+                  eligibility criteria
+                </Link>
+                . The oracle applies it from its first run on that day.
+              </span>
+            </span>
+          </Notice>
+        )
+      })}
+    </div>
   )
 }
 

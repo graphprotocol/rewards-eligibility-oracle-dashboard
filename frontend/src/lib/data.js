@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 
+import { parseMetrics } from './metrics.js'
+
 /**
  * Normalizes the parsed contents of data.json — the single contract between the
  * Python data layer and this renderer. Python owns fetching and shape; the
@@ -23,6 +25,10 @@ export function parseDashboardData(raw) {
     // the oracle itself has not run for days.
     indexersRetrievedAt: Number(env.indexers_retrieved_epoch) || 0,
     indexers: Array.isArray(env.indexers) ? env.indexers : [],
+    // Daily eligibility metrics from the oracle's subgraph. Arbitrum One only,
+    // and null whenever the subgraph could not be read: the page then renders
+    // from the contract alone, as it did before the metrics existed.
+    metrics: parseMetrics(env.metrics),
     /**
      * Whether this network has anything the oracle has actually judged.
      *
