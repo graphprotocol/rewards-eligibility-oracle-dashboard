@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "last_check": "2026-09-15 19:41:21 UTC",
-    "last_oracle_update_time": 1789466417
+    "last_check": "2026-10-05 17:04:15 UTC",
+    "last_oracle_update_time": 1791208764
   },
   "status_changes": [
     {
@@ -129,6 +129,12 @@
       "previous_status": "ineligible-unqualified",
       "new_status": "eligible-active",
       "date_status_change": "2026-09-15"
+    },
+    {
+      "address": "0x605d0b92cde1e110d5ae9123969097ea2489d1aa",
+      "previous_status": "eligible-active",
+      "new_status": "eligible-grace",
+      "date_status_change": "2026-10-05"
     }
   ]
 }

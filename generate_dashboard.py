@@ -1686,18 +1686,105 @@ def _strip_markdown(text: str) -> str:
     return " ".join(text.split())
 
 
-def fetch_eligibility_criteria() -> dict:
+# Thresholds an upcoming change can be read for, keyed by the oracle's config
+# name. Each pattern matches the unit that follows the number in the prose.
+_UPCOMING_UNITS = {
+    "MIN_SUBGRAPHS": r"subgraphs?\b",
+    "MIN_ONLINE_DAYS": r"(?:active|online)\s+days?\b",
+    "MAX_LATENCY_MS": r"ms\b",
+    "MAX_BLOCKS_BEHIND": r"blocks?\b",
+}
+
+
+def _extract_threshold_changes(text: str) -> dict:
     """
-    Fetch the Active Eligibility Criteria that the oracle actually applies.
+    Read new threshold values out of one Upcoming row's prose.
+
+    The row is written for people ("… on each of 5 subgraphs that day, up from
+    1 subgraph"), so this only reports a value when it is unambiguous: the unit
+    must appear with a "from <old>" value and exactly one other value. A
+    restated, unchanged threshold ("Indexers still need 5+ active days") has no
+    "from" and is ignored. Anything less clear yields nothing, and the page then
+    shows the row's text without the numbers derived from it.
+    """
+    changes = {}
+    for key, unit in _UPCOMING_UNITS.items():
+        number = r"(\d[\d,]*)\+?\s*"
+        old = re.findall(r"\bfrom\s+" + number + unit, text, re.IGNORECASE)
+        mentioned = re.findall(number + unit, text, re.IGNORECASE)
+        if not old:
+            continue
+        new = list(mentioned)
+        for value in old:
+            new.remove(value)
+        if len(set(new)) == 1:
+            changes[key] = int(new[0].replace(",", ""))
+    return changes
+
+
+def _parse_upcoming_criteria(body: str, today) -> List[dict]:
+    """
+    Parse the "Upcoming Eligibility Criteria" table into scheduled changes.
+
+    Rows whose effective date has already passed are dropped, so the
+    announcement disappears on its own even if nobody moves the row into the
+    Active section. Rows without a valid YYYY-MM-DD date are skipped.
+    """
+    match = re.search(
+        r"^##\s+Upcoming Eligibility Criteria\s*$(.*?)^(?:##\s|---\s*$)",
+        body,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not match:
+        return []
+
+    upcoming: List[dict] = []
+    for line in match.group(1).splitlines():
+        if not line.strip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 3 or set(cells[0]) <= set("-: "):
+            continue
+        try:
+            effective = datetime.strptime(cells[-1], "%Y-%m-%d").date()
+        except ValueError:
+            continue                                          # header row, or a malformed date
+        if effective < today:
+            continue
+
+        text = _strip_markdown(cells[0])
+        label, _, summary = text.partition(":")
+        if not summary.strip():
+            label, summary = "", text
+        upcoming.append({
+            "label": re.sub(r"\s*Requirements?$", "", label.strip()),
+            "summary": summary.strip(),
+            "justification": _strip_markdown(cells[1]),
+            "effective_date": effective.isoformat(),
+            "changes": _extract_threshold_changes(summary),
+        })
+
+    return sorted(upcoming, key=lambda row: row["effective_date"])
+
+
+def fetch_eligibility_criteria(today=None) -> dict:
+    """
+    Fetch the Active Eligibility Criteria that the oracle actually applies, and
+    any changes the document announces.
 
     The criteria live in the oracle's own repository and change over time (the
     document carries an explicit "Upcoming" section), so they are read at
     generation time rather than hardcoded here. Indexers seeing stale
     requirements would be worse than showing none.
 
-    Returns a dict with the parsed bullets, the canonical source URL, and
-    whether the built-in fallback had to be used.
+    Upcoming changes are an announcement, not something on chain: the oracle
+    applies whatever its own config says on the day. They are re-read on every
+    generation, so a newly announced change appears without a deploy.
+
+    Returns a dict with the parsed bullets, the upcoming changes, the canonical
+    source URL, and whether the built-in fallback had to be used.
     """
+    today = today or datetime.now(timezone.utc).date()
     try:
         response = requests.get(_ELIGIBILITY_CRITERIA_RAW, timeout=15)
         response.raise_for_status()
@@ -1706,9 +1793,14 @@ def fetch_eligibility_criteria() -> dict:
         print(f"⚠ Could not fetch eligibility criteria ({exc}); using built-in fallback.")
         return {
             "items": _ELIGIBILITY_CRITERIA_FALLBACK,
+            "upcoming": [],
             "source_url": ELIGIBILITY_CRITERIA_URL,
             "is_fallback": True,
         }
+
+    upcoming = _parse_upcoming_criteria(body, today)
+    if upcoming:
+        print(f"✓ Found {len(upcoming)} upcoming eligibility criteria change(s)")
 
     # Take only the "Active Eligibility Criteria" section, stopping at the next
     # heading or horizontal rule so the changelog below is never included.
@@ -1741,12 +1833,149 @@ def fetch_eligibility_criteria() -> dict:
         print("⚠ Eligibility criteria document had no parsable bullets; using built-in fallback.")
         return {
             "items": _ELIGIBILITY_CRITERIA_FALLBACK,
+            "upcoming": upcoming,
             "source_url": ELIGIBILITY_CRITERIA_URL,
             "is_fallback": True,
         }
 
     print(f"✓ Fetched {len(items)} active eligibility criteria")
-    return {"items": items, "source_url": ELIGIBILITY_CRITERIA_URL, "is_fallback": False}
+    return {
+        "items": items,
+        "upcoming": upcoming,
+        "source_url": ELIGIBILITY_CRITERIA_URL,
+        "is_fallback": False,
+    }
+
+
+# The oracle's per-indexer, per-day eligibility metrics, decoded from its
+# DataEdge payloads (github.com/graphprotocol/rewards-eligibility-oracle-subgraph).
+# The subgraph id, not a deployment id, so a new version is picked up without a
+# change here.
+METRICS_SUBGRAPH_ID = "J5sHNptu4EknmoS9vBk69dZ8bRtPSqLLrMdQvkLces3r"
+
+# The oracle publishes metrics on Arbitrum One only.
+METRICS_NETWORK_ID = "42161"
+
+# Order of the per-day counters in data.json. Positional rows keep the file (and
+# the JSON embedded in every page) small: ~100 indexers x 29 days.
+METRICS_COLUMNS = [
+    "day",
+    "query_attempts",
+    "qualifying_queries",
+    "qualifying_subgraphs",
+    "failed_status",
+    "failed_latency",
+    "failed_blocks_behind",
+]
+
+_METRICS_PAGE_SIZE = 1000
+
+
+def _query_metrics_subgraph(url: str, query: str, variables: Optional[dict] = None) -> dict:
+    response = requests.post(url, json={"query": query, "variables": variables or {}}, timeout=30)
+    response.raise_for_status()
+    body = response.json()
+    if body.get("errors"):
+        raise RuntimeError(body["errors"][0].get("message", "unknown error"))
+    return body["data"]
+
+
+def fetch_indexer_metrics(graph_api_key: str, subgraph_id: Optional[str] = None) -> Optional[dict]:
+    """
+    Read the current window's daily eligibility metrics from the metrics subgraph.
+
+    The contract stays the source of truth for eligibility itself; this is the
+    explanation behind it. So a failure here is never fatal: it returns None
+    and the page renders exactly as it did before the metrics existed.
+
+    Only days that were actually published are reported as such. A window day
+    with no `Day` entity is unknown, not zero, and the frontend has to be able
+    to tell the two apart. Within a published day, an indexer with no row was
+    routed nothing, which the frontend materializes as zeros.
+    """
+    subgraph_id = subgraph_id or os.getenv("REO_METRICS_SUBGRAPH_ID") or METRICS_SUBGRAPH_ID
+    url = f"https://gateway.thegraph.com/api/{graph_api_key}/subgraphs/id/{subgraph_id}"
+
+    try:
+        state = _query_metrics_subgraph(url, """{
+          oracleState(id: "current") {
+            windowStartDay
+            windowEndDay
+            criteria { minOnlineDays minSubgraphs maxLatencyMs maxBlocksBehind }
+            latestRun { date runDay transactionHash blockNumber blockTimestamp }
+          }
+        }""")["oracleState"]
+        if not state:
+            print("⚠ Metrics subgraph has no oracle state yet; rendering without metrics.")
+            return None
+
+        start, end = state["windowStartDay"], state["windowEndDay"]
+        days = _query_metrics_subgraph(url, """query ($start: Int!, $end: Int!) {
+          days(first: 1000, where: { dayNumber_gte: $start, dayNumber_lte: $end }) {
+            dayNumber
+            isFinal
+          }
+        }""", {"start": start, "end": end})["days"]
+
+        indexers: dict = {}
+        cursor = ""
+        while True:
+            page = _query_metrics_subgraph(url, """query ($start: Int!, $end: Int!, $cursor: String!, $first: Int!) {
+              indexerDays(
+                first: $first
+                orderBy: id
+                where: { dayNumber_gte: $start, dayNumber_lte: $end, id_gt: $cursor }
+              ) {
+                id dayNumber queryAttempts qualifyingQueries qualifyingSubgraphs
+                failedStatus failedLatency failedBlocksBehind
+              }
+            }""", {"start": start, "end": end, "cursor": cursor, "first": _METRICS_PAGE_SIZE})["indexerDays"]
+            for row in page:
+                # Ids are "<address>-<YYYY-MM-DD>", which saves a nested lookup.
+                address = row["id"].split("-", 1)[0].lower()
+                indexers.setdefault(address, []).append([
+                    row["dayNumber"],
+                    int(row["queryAttempts"]),
+                    int(row["qualifyingQueries"]),
+                    int(row["qualifyingSubgraphs"]),
+                    int(row["failedStatus"]),
+                    int(row["failedLatency"]),
+                    int(row["failedBlocksBehind"]),
+                ])
+            if len(page) < _METRICS_PAGE_SIZE:
+                break
+            cursor = page[-1]["id"]
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"⚠ Could not fetch indexer metrics ({exc}); rendering without metrics.")
+        return None
+
+    for rows in indexers.values():
+        rows.sort(key=lambda r: r[0])
+
+    run = state["latestRun"]
+    criteria = state["criteria"]
+    print(f"✓ Fetched metrics for {len(indexers)} indexers over {len(days)} published days "
+          f"(run {run['date']})")
+    return {
+        "subgraph_id": subgraph_id,
+        "run_date": run["date"],
+        "run_day": run["runDay"],
+        "run_transaction": run["transactionHash"],
+        "run_block": int(run["blockNumber"]),
+        "run_timestamp": int(run["blockTimestamp"]),
+        "window_start_day": start,
+        "window_end_day": end,
+        "criteria": {
+            "min_online_days": int(criteria["minOnlineDays"]),
+            "min_subgraphs": int(criteria["minSubgraphs"]),
+            "max_latency_ms": int(criteria["maxLatencyMs"]),
+            "max_blocks_behind": int(criteria["maxBlocksBehind"]),
+        },
+        "published_days": sorted(d["dayNumber"] for d in days),
+        "partial_days": sorted(d["dayNumber"] for d in days if not d["isFinal"]),
+        "columns": METRICS_COLUMNS,
+        "indexers": indexers,
+    }
 
 
 def _parse_retrieved_epoch(value: Optional[str]) -> Optional[int]:
@@ -1763,7 +1992,8 @@ def _parse_retrieved_epoch(value: Optional[str]) -> Optional[int]:
         return None
 
 
-def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
+def write_dashboard_data(environment_data: dict, output_dir: str,
+                         metrics: Optional[dict] = None) -> str:
     """
     Write the single JSON file that is the contract between the two halves of
     this project: Python fetches on-chain data, the React frontend renders it.
@@ -1771,6 +2001,9 @@ def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
     Everything the UI needs lives here, so the frontend never has to reach into
     the working files at the repository root. Written atomically, because the
     renderer or a deploy may read it at any moment.
+
+    `metrics` (from fetch_indexer_metrics) is attached to the Arbitrum One
+    environment only; every other environment gets null.
     """
     payload = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
@@ -1809,6 +2042,7 @@ def write_dashboard_data(environment_data: dict, output_dir: str) -> str:
             "last_oracle_update_time": env_meta.get("last_oracle_update_time"),
             "stats": env_data.get("stats", {}),
             "indexers": env_data.get("indexers", []),
+            "metrics": metrics if str(config.get("network_id", "")) == METRICS_NETWORK_ID else None,
         })
 
     data_path = os.path.join(output_dir, "data.json")
@@ -2136,7 +2370,11 @@ def main(render: bool = True) -> bool:
     output_dir = os.getenv('REO_OUTPUT_DIR', 'output')
     os.makedirs(output_dir, exist_ok=True)
 
-    write_dashboard_data(environment_data, output_dir)
+    metrics = None
+    if graph_api_key and graph_api_key != "your_graph_api_key_here":
+        metrics = fetch_indexer_metrics(graph_api_key)
+
+    write_dashboard_data(environment_data, output_dir, metrics=metrics)
 
     if render:
         copy_gds_assets(output_dir)

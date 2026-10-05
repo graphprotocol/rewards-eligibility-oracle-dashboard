@@ -18,6 +18,7 @@ import {
   buildProps,
   renderDocument,
   NoDataError,
+  IndexerNotFoundError,
 } from '../frontend/dist-ssr/entry-server.js'
 
 /**
@@ -69,16 +70,42 @@ const PENDING_PAGE = `<!DOCTYPE html>
 </html>
 `
 
+/** An address that is not on any roster. Short-lived, since it may join one. */
+const NOT_FOUND_PAGE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indexer not found · Rewards Eligibility Oracle</title>
+<base href="../../">
+<link rel="stylesheet" href="gds.css">
+</head>
+<body>
+<main style="max-width:40rem;margin:20vh auto;padding:0 1.5rem;text-align:center">
+<h1>Indexer not found</h1>
+<p>This address is not on the indexer roster of any network. <a href="./">See all indexers</a>.</p>
+</main>
+</body>
+</html>
+`
+
 export default async function handler(request, response) {
+  // Set by the /indexer/:address rewrite in vercel.json.
+  const indexer = typeof request.query?.indexer === 'string' ? request.query.indexer : null
   try {
     if (!cached) cached = await loadData()
-    const props = buildProps(cached, { now: Date.now() })
+    const props = buildProps(cached, { now: Date.now(), indexer })
     const html = renderDocument(props)
 
     response.setHeader('Content-Type', 'text/html; charset=utf-8')
     response.setHeader('Cache-Control', CACHE_CONTROL)
     return response.status(200).send(html)
   } catch (error) {
+    if (error instanceof IndexerNotFoundError) {
+      response.setHeader('Content-Type', 'text/html; charset=utf-8')
+      response.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300')
+      return response.status(404).send(NOT_FOUND_PAGE)
+    }
     cached = null
 
     const notGenerated =

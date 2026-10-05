@@ -152,6 +152,52 @@ try {
   check(expands, '"View all" reveals the rest of the roster')
 
   await page.screenshot({ path: join(shotDir, 'desktop-full.png'), fullPage: true })
+
+  // Indexer pages. Each row links to one, prerendered two levels down, where
+  // every asset resolves through a relative <base>. That only works from a URL
+  // with a trailing slash, so check the no-slash spelling too: it must be
+  // corrected rather than render unstyled.
+  // Prefer a row with daily metrics (its online-days cell reads "N / 29"), so
+  // the interactive day strip is exercised whenever the data has one.
+  const withMetrics = page.locator('tbody tr').filter({ hasText: /\d+\s*\/\s*\d+/ })
+  const detailRow = (await withMetrics.count()) > 0 ? withMetrics.first() : page.locator('tbody tr').first()
+  const detailHref = await detailRow.locator('a[href*="indexer/"]').first().getAttribute('href')
+  check(Boolean(detailHref), 'roster rows link to indexer pages', detailHref ?? 'no link')
+  if (detailHref) {
+    const detailUrl = new URL(detailHref, `${base}/`).href
+    for (const [label, url] of [['indexer', detailUrl], ['indexer no-slash', detailUrl.replace(/\/(\?|$)/, '$1')]]) {
+      const detail = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+      const bad = []
+      const errors = []
+      detail.on('response', (r) => r.status() >= 400 && bad.push(`${r.status()} ${r.url()}`))
+      detail.on('pageerror', (e) => errors.push(e.message.split('\n')[0]))
+      const response = await detail.goto(url, { waitUntil: 'networkidle', timeout: 60_000 })
+      await detail.waitForTimeout(1000)
+      const styled = await detail.evaluate(() => /Euclid/i.test(getComputedStyle(document.querySelector('h1')).fontFamily))
+      check(response.status() < 400 && bad.length === 0, `${label}: page and assets load`, bad.slice(0, 2).join(' | '))
+      check(errors.length === 0, `${label}: no page errors`, errors.slice(0, 2).join(' | '))
+      check(styled, `${label}: styled`, detail.url())
+
+      if (label === 'indexer') {
+        // With metrics, the day strip is interactive: selecting another day
+        // must change the day shown below it. Without metrics there is no
+        // strip, and the page says why.
+        const cells = detail.locator('section[aria-labelledby="window-heading"] button[aria-pressed="false"]')
+        if ((await cells.count()) > 0) {
+          const heading = detail.locator('section[aria-labelledby="window-heading"] h3').first()
+          const before = await heading.innerText()
+          await cells.first().click()
+          await detail.waitForTimeout(300)
+          check((await heading.innerText()) !== before, 'indexer page hydrated (selecting a day updates the detail)')
+        } else {
+          notes.push('  INFO  indexer page has no day strip (no metrics for this network, or no query data for this indexer)')
+        }
+        await detail.screenshot({ path: join(shotDir, 'indexer.png'), fullPage: true })
+      }
+      await detail.close()
+    }
+  }
+
   await page.close()
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } })
