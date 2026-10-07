@@ -4,11 +4,11 @@ This file provides guidance to AI coding assistants when working with code in th
 
 ## Project Overview
 
-This is a **Python-based static dashboard** for monitoring The Graph Protocol's Rewards Eligibility Oracle (GIP-0079). The system tracks indexer eligibility for rewards based on service quality metrics, displaying real-time blockchain data in a self-contained HTML dashboard.
+This is a **Python + React dashboard** for monitoring The Graph Protocol's Rewards Eligibility Oracle (GIP-0079). The system tracks indexer eligibility for rewards based on service quality metrics, displaying real-time blockchain data.
 
-**Key Architecture**: Pure Python script (no web framework) → generates static `index.html` → deployed to static hosting via Docker Compose with scheduler that regenerates every 5 minutes.
+**Key Architecture**: Python fetches on-chain data and publishes `data.json`; Vercel renders the page per request (`api/render.js` over the SSR bundle); an hourly cron (`api/refresh.py`) refreshes the data. The Docker/Caddy static deployment is a legacy fallback.
 
-**Production URL**: https://hub.thegraph.foundation/reo/
+**Production URL**: https://reo.thegraph.com — `https://hub.thegraph.foundation/reo*` 301-redirects there (Caddy, configured in `dashboard-infrastructure`).
 
 ## CRITICAL: Deployment Warnings
 
@@ -17,20 +17,40 @@ broke in production.
 
 ### The deploy
 
-```bash
-cd dashboard-infrastructure/
-docker compose pull reo reo-scheduler
-docker compose up -d --force-recreate reo reo-scheduler
+Vercel builds and deploys on every push to `main` (`scripts/build_vercel.sh`,
+wired up by `vercel.json`) and serves `reo.thegraph.com`. There is no manual
+deploy step on the server.
 
-# Then ALWAYS verify visually (see below) — never by HTTP status alone:
-cd ../rewards-eligibility-oracle-dashboard/frontend
-npm run verify -- https://hub.thegraph.foundation/reo
+After any deploy, ALWAYS verify visually (see below) — never by HTTP status
+alone:
+
+```bash
+cd frontend && npm run verify -- https://reo.thegraph.com
 ```
 
-`reo` is one-shot: it fetches data, writes `output/data.json`, copies the
-frontend assets, and renders `output/index.html`. `reo-scheduler` then repeats
-that every 5 minutes. **Restart both** — pulling an image does not update a
-running container.
+Data freshness is separate from deploys: the hourly `/api/refresh` cron runs
+`api/refresh.py`, which pulls working state from Blob, regenerates `data.json`,
+and publishes it back. A deploy does not refresh data; a refresh does not
+deploy code. If Blob has no `data.json` (e.g. right after connecting a fresh
+Blob store), the page serves a 503 "Generating" placeholder — trigger the
+first refresh by hand (see the Vercel section under Deployment).
+
+Rollback off Vercel is the legacy Docker path — see "Legacy Docker fallback"
+near the end of this section.
+
+### Caddy must bind the public IP, not 0.0.0.0
+
+The host runs `tailscale serve` (tailnet-only HTTPS for opencode), which holds
+port 443 **on the Tailscale IP** (`100.72.138.123:443`). Caddy's compose file
+binds ports to the **public IPv4** (`157.90.236.237:80/443`) for exactly this
+reason: a wildcard `0.0.0.0:443` bind cannot coexist with that listener. When
+dockerd restarted (2026-10-05), Caddy lost the bind race, died with exit 128
+("address already in use"), Docker stopped retrying — and every
+`hub.thegraph.foundation` site went down while all the data containers stayed
+healthy. If the whole hub ever refuses connections, check
+`docker ps -a --filter name=dashboards-caddy` first. Do not "fix" this by
+turning off `tailscale serve` — bind Caddy to the public IP instead. All served
+domains are IPv4-only (no AAAA), so the v4 binding is sufficient.
 
 ### Verify visually, not with curl
 
@@ -50,27 +70,25 @@ hydration), and mobile renders cards without horizontal overflow. It writes
 screenshots to `verification-shots/` and exits non-zero on failure. **Look at
 the screenshots.**
 
-### The URL must work without a trailing slash
+### The old URL redirects; every spelling must keep working
 
-`hub.thegraph.foundation/reo` and `.../reo/` must both work. Assets are
-referenced relatively (`gds.css`, `app.js`), so without a redirect the browser
-resolves them against the domain root and they 404 — leaving the page unstyled.
-
-Caddy needs an explicit redirect *before* the handler, because `handle /reo*`
-serves `index.html` directly and never issues the directory redirect itself:
+Since 2026-10-07 every `hub.thegraph.foundation/reo*` path 301-redirects to
+`reo.thegraph.com` (Caddy, in `dashboard-infrastructure`):
 
 ```caddyfile
-redir /reo /reo/ 301
-
-handle /reo* {
-    root * /usr/share/nginx/html/reo
-    uri strip_prefix /reo
-    file_server browse
+handle_path /reo* {
+    redir https://reo.thegraph.com{uri} 301
 }
 ```
 
-The old dashboard inlined all its CSS, so it survived this; the current build
-depends on external assets and does not.
+`handle_path` strips `/reo` before the redirect — a bare `uri strip_prefix`
+can sort after `redir` in Caddy's directive ordering — so sub-paths map
+(`/reo/indexer/0x…` → `/indexer/0x…`) and query strings survive.
+
+Trailing slashes still matter on Vercel: the indexer pages' `<base
+href="../../">` only resolves from a URL ending in `/`, so `vercel.json`
+rewrites both spellings and an inline script adds a missing slash.
+`verify-deployment.mjs` checks both.
 
 ### Editing the Caddyfile requires restarting Caddy
 
@@ -80,9 +98,13 @@ keeps serving the old one — `caddy reload` will happily report success while
 nothing changes. Confirm the container actually sees the edit:
 
 ```bash
-docker exec dashboards-caddy grep -n "redir /reo" /etc/caddy/Caddyfile
+docker exec dashboards-caddy grep -n "reo.thegraph.com" /etc/caddy/Caddyfile
 docker restart dashboards-caddy   # if it does not
 ```
+
+This bit us during the redirect cutover itself (2026-10-07): the edit looked
+live and `caddy validate` passed while the container was still serving the
+old file.
 
 ### Both networks need an RPC endpoint
 
@@ -94,6 +116,32 @@ empty state. The public endpoint is sufficient — no key required:
 ```
 RPC_ENDPOINT_MAINNET=https://arb1.arbitrum.io/rpc
 ```
+
+### Legacy Docker fallback (through ~2026-10-14)
+
+The hub host still runs `reo`/`reo-scheduler`, so the old static site can be
+reinstated instantly if Vercel breaks: revert the redirect block in
+`dashboard-infrastructure`'s Caddyfile (commit `6413359`), then
+
+```bash
+docker restart dashboards-caddy
+```
+
+To pick up a new image on that path (pulling does not update a running
+container):
+
+```bash
+cd dashboard-infrastructure/
+docker compose pull reo reo-scheduler
+docker compose up -d --force-recreate reo reo-scheduler
+```
+
+`reo` is one-shot: it fetches data, writes `output/data.json`, copies the
+frontend assets, and renders `output/index.html`; `reo-scheduler` repeats
+that every 5 minutes. Decommission around 2026-10-14: stop
+`reo-scheduler-prod`, remove the `reo`/`reo-scheduler` services and the
+`reo-output`/`reo-data` volumes from `docker-compose.yml`, and delete this
+section. The remaining items below apply only to this path.
 
 ### Image tags
 
@@ -399,20 +447,7 @@ have left every roster.
 There are two supported targets. They share the entire pipeline and the entire
 UI; they differ only in **when index.html is rendered**.
 
-### Docker Compose (current production)
-
-- Separate infrastructure repository: `dashboard-infrastructure`
-- `reo` container: One-shot container that generates dashboard on startup
-- `reo-scheduler` container: Runs continuously, regenerates every 5 minutes
-- `caddy` container: Web server that serves static HTML files
-- Volumes: `reo-output` for generated HTML, `reo-data` for database
-
-Renders **ahead of time**: `render_dashboard()` shells out to
-`frontend/scripts/prerender.mjs`, which writes `output/index.html`.
-
-**For detailed deployment instructions**, see `DEPLOYMENT.md`.
-
-### Vercel
+### Vercel (production)
 
 Renders **per request**: `api/render.js` runs the same SSR bundle over the
 `data.json` that `api/refresh.py` published to Blob. The CDN keeps a render
@@ -462,3 +497,20 @@ does nothing, which is what keeps local runs identical to how they always were.
 **Single writer.** One cron writes this state and there are no locks. Do not add
 a second writer without replacing `storage.py` with something that has real
 atomicity.
+
+### Docker Compose (legacy fallback)
+
+- Separate infrastructure repository: `dashboard-infrastructure` (GitHub has
+  renamed it to `graphprotocol/hub-foundation-infrastructure`)
+- `reo` container: One-shot container that generates dashboard on startup
+- `reo-scheduler` container: Runs continuously, regenerates every 5 minutes
+- `caddy` container: Serves the static hub sites — for REO, only the
+  `hub.thegraph.foundation/reo*` → `reo.thegraph.com` redirect
+- Volumes: `reo-output` for generated HTML, `reo-data` for database
+
+Renders **ahead of time**: `render_dashboard()` shells out to
+`frontend/scripts/prerender.mjs`, which writes `output/index.html`.
+
+Production moved to Vercel on 2026-10-07. This path stays warm as the
+redirect's rollback until ~2026-10-14 (see "Legacy Docker fallback" in the
+warnings above). **For detailed deployment instructions**, see `DEPLOYMENT.md`.
