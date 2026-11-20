@@ -6,9 +6,9 @@ This file provides guidance to AI coding assistants when working with code in th
 
 This is a **Python + React dashboard** for monitoring The Graph Protocol's Rewards Eligibility Oracle (GIP-0079). The system tracks indexer eligibility for rewards based on service quality metrics, displaying real-time blockchain data.
 
-**Key Architecture**: Python fetches on-chain data and publishes `data.json`; Vercel renders the page per request (`api/render.js` over the SSR bundle); an hourly cron (`api/refresh.py`) refreshes the data. The Docker/Caddy static deployment is a legacy fallback.
+**Key Architecture**: Python fetches on-chain data and publishes `data.json`; Vercel renders the page per request (`api/render.js` over the SSR bundle); an hourly cron (`api/refresh.py`) refreshes the data. Vercel is the only deployment: the hub host that ran the old Docker/Caddy deployment was decommissioned on 2026-11-17.
 
-**Production URL**: https://reo.thegraph.com — `https://hub.thegraph.foundation/reo*` 301-redirects there (Caddy, configured in `dashboard-infrastructure`).
+**Production URL**: https://reo.thegraph.com. The old `https://hub.thegraph.foundation/reo*` URLs no longer redirect: the hub host that served that 301 was decommissioned on 2026-11-17.
 
 ## CRITICAL: Deployment Warnings
 
@@ -35,22 +35,9 @@ deploy code. If Blob has no `data.json` (e.g. right after connecting a fresh
 Blob store), the page serves a 503 "Generating" placeholder — trigger the
 first refresh by hand (see the Vercel section under Deployment).
 
-Rollback off Vercel is the legacy Docker path — see "Legacy Docker fallback"
-near the end of this section.
-
-### Caddy must bind the public IP, not 0.0.0.0
-
-The host runs `tailscale serve` (tailnet-only HTTPS for opencode), which holds
-port 443 **on the Tailscale IP** (`100.72.138.123:443`). Caddy's compose file
-binds ports to the **public IPv4** (`157.90.236.237:80/443`) for exactly this
-reason: a wildcard `0.0.0.0:443` bind cannot coexist with that listener. When
-dockerd restarted (2026-10-05), Caddy lost the bind race, died with exit 128
-("address already in use"), Docker stopped retrying — and every
-`hub.thegraph.foundation` site went down while all the data containers stayed
-healthy. If the whole hub ever refuses connections, check
-`docker ps -a --filter name=dashboards-caddy` first. Do not "fix" this by
-turning off `tailscale serve` — bind Caddy to the public IP instead. All served
-domains are IPv4-only (no AAAA), so the v4 binding is sufficient.
+There is no fallback off Vercel. To undo a bad deploy, promote the previous
+deployment in the Vercel dashboard (Instant Rollback), or revert the commit
+and push.
 
 ### Verify visually, not with curl
 
@@ -70,41 +57,11 @@ hydration), and mobile renders cards without horizontal overflow. It writes
 screenshots to `verification-shots/` and exits non-zero on failure. **Look at
 the screenshots.**
 
-### The old URL redirects; every spelling must keep working
+### Trailing slashes matter on Vercel
 
-Since 2026-10-07 every `hub.thegraph.foundation/reo*` path 301-redirects to
-`reo.thegraph.com` (Caddy, in `dashboard-infrastructure`):
-
-```caddyfile
-handle_path /reo* {
-    redir https://reo.thegraph.com{uri} 301
-}
-```
-
-`handle_path` strips `/reo` before the redirect — a bare `uri strip_prefix`
-can sort after `redir` in Caddy's directive ordering — so sub-paths map
-(`/reo/indexer/0x…` → `/indexer/0x…`) and query strings survive.
-
-Trailing slashes still matter on Vercel: the indexer pages' `<base
-href="../../">` only resolves from a URL ending in `/`, so `vercel.json`
-rewrites both spellings and an inline script adds a missing slash.
-`verify-deployment.mjs` checks both.
-
-### Editing the Caddyfile requires restarting Caddy
-
-`infrastructure/caddy/Caddyfile` is bind-mounted as a **single file**. Editors
-that write atomically (temp file + rename) change the inode, and the container
-keeps serving the old one — `caddy reload` will happily report success while
-nothing changes. Confirm the container actually sees the edit:
-
-```bash
-docker exec dashboards-caddy grep -n "reo.thegraph.com" /etc/caddy/Caddyfile
-docker restart dashboards-caddy   # if it does not
-```
-
-This bit us during the redirect cutover itself (2026-10-07): the edit looked
-live and `caddy validate` passed while the container was still serving the
-old file.
+The indexer pages' `<base href="../../">` only resolves from a URL ending
+in `/`, so `vercel.json` rewrites both spellings and an inline script adds a
+missing slash. `verify-deployment.mjs` checks both.
 
 ### Both networks need an RPC endpoint
 
@@ -117,55 +74,16 @@ empty state. The public endpoint is sufficient — no key required:
 RPC_ENDPOINT_MAINNET=https://arb1.arbitrum.io/rpc
 ```
 
-### Legacy Docker fallback (through ~2026-10-14)
+### The hub host is gone (decommissioned 2026-11-17)
 
-The hub host still runs `reo`/`reo-scheduler`, so the old static site can be
-reinstated instantly if Vercel breaks: revert the redirect block in
-`dashboard-infrastructure`'s Caddyfile (commit `6413359`), then
-
-```bash
-docker restart dashboards-caddy
-```
-
-To pick up a new image on that path (pulling does not update a running
-container):
-
-```bash
-cd dashboard-infrastructure/
-docker compose pull reo reo-scheduler
-docker compose up -d --force-recreate reo reo-scheduler
-```
-
-`reo` is one-shot: it fetches data, writes `output/data.json`, copies the
-frontend assets, and renders `output/index.html`; `reo-scheduler` repeats
-that every 5 minutes. Decommission around 2026-10-14: stop
-`reo-scheduler-prod`, remove the `reo`/`reo-scheduler` services and the
-`reo-output`/`reo-data` volumes from `docker-compose.yml`, and delete this
-section. The remaining items below apply only to this path.
-
-### Image tags
-
-`docker.yml` publishes `:latest` and `:main` on every push to main, and
-`:{version}` for `v*.*.*` git tags. Compose tracks `:latest`. To pin a release,
-tag the repo (`git tag v0.4.0 && git push origin v0.4.0`), wait for the workflow,
-then set the image in `docker-compose.yml`.
-
-### The scheduler healthcheck
-
-It asserts `output/index.html` was rewritten within the last 15 minutes, which
-detects a hung loop rather than just a live process. It deliberately does not
-call `scripts/healthcheck.py` — that file is not in the published image, and
-referencing it left the container permanently unhealthy while it was working
-fine.
-
-### GitHub Actions timing
-
-After merging, `:latest` is not immediately available. Wait for the main-branch
-workflow to finish (~1-2 min):
-
-```bash
-gh run list --branch main --limit 1   # wait for "completed success"
-```
+The Docker deployment on `hub.thegraph.foundation` (Caddy plus
+`reo-scheduler-prod`) was shut down on 2026-11-17, along with its volumes and
+the `/reo*` redirect. Its final output is archived on that host in
+`~/backups/hub/2026-11-17-hub-final/`. The repo still holds `Dockerfile`,
+`scheduler.py` and the `docker.yml` image workflow, but nothing runs them in
+production. The warnings that applied only to that host (Caddy's public-IP
+bind, the single-file Caddyfile mount, image tags, the scheduler healthcheck)
+are in git history: `git show 652207b:CLAUDE.md`.
 
 ## Development Commands
 
@@ -498,19 +416,10 @@ does nothing, which is what keeps local runs identical to how they always were.
 a second writer without replacing `storage.py` with something that has real
 atomicity.
 
-### Docker Compose (legacy fallback)
+### Docker (decommissioned)
 
-- Separate infrastructure repository: `dashboard-infrastructure` (GitHub has
-  renamed it to `graphprotocol/hub-foundation-infrastructure`)
-- `reo` container: One-shot container that generates dashboard on startup
-- `reo-scheduler` container: Runs continuously, regenerates every 5 minutes
-- `caddy` container: Serves the static hub sites — for REO, only the
-  `hub.thegraph.foundation/reo*` → `reo.thegraph.com` redirect
-- Volumes: `reo-output` for generated HTML, `reo-data` for database
-
-Renders **ahead of time**: `render_dashboard()` shells out to
-`frontend/scripts/prerender.mjs`, which writes `output/index.html`.
-
-Production moved to Vercel on 2026-10-07. This path stays warm as the
-redirect's rollback until ~2026-10-14 (see "Legacy Docker fallback" in the
-warnings above). **For detailed deployment instructions**, see `DEPLOYMENT.md`.
+The Docker Compose deployment on the hub host (`dashboard-infrastructure`,
+renamed on GitHub to `graphprotocol/hub-foundation-infrastructure`) was shut
+down on 2026-11-17. Local runs still render ahead of time:
+`render_dashboard()` shells out to `frontend/scripts/prerender.mjs`, which
+writes `output/index.html`.

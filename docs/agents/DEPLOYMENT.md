@@ -1,3 +1,7 @@
+> **Obsolete (2026-11-17):** this describes the Docker deployment on the hub
+> host, which has been decommissioned. Production is Vercel at
+> https://reo.thegraph.com; see `CLAUDE.md`.
+
 # Deployment Lessons Learned
 
 This document captures important lessons learned during the v0.1.0 multi-environment deployment that were not properly documented beforehand.

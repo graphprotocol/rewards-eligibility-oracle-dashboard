@@ -1,3 +1,5 @@
+# OBSOLETE (2026-11-17): this workflow deploys to the hub host's Docker
+# stack, which has been decommissioned. Production is Vercel; see CLAUDE.md.
 name: auto-deploy-reo
 description: Automated REO Dashboard deployment with testing and rollback
 

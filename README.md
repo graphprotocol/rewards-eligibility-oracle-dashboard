@@ -2,7 +2,7 @@
 
 The **Rewards Eligibility Oracle (REO)** dashboard monitors indexer eligibility for rewards based on service quality metrics in [The Graph Protocol](https://thegraph.com).
 
-**Live Dashboard**: https://hub.thegraph.foundation/reo/
+**Live Dashboard**: https://reo.thegraph.com
 
 ## What It Does
 
@@ -34,7 +34,7 @@ open output/index.html
 
 > After deploying, verify visually — an HTTP 200 does not mean the page rendered:
 > ```bash
-> cd frontend && npm run verify -- https://hub.thegraph.foundation/reo
+> cd frontend && npm run verify -- https://reo.thegraph.com
 > ```
 > This drives a real browser, asserts styling/data/hydration, saves screenshots to
 > `verification-shots/`, and exits non-zero on failure.
