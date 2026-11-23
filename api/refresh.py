@@ -1,27 +1,23 @@
-"""
-Regenerates the dashboard data. Invoked hourly by Vercel Cron.
+"""Regenerates the dashboard data. Invoked hourly by Vercel Cron.
 
-This is the serverless equivalent of scheduler.py: it runs the same pipeline
-main() has always run, with two differences forced by a per-invocation
-filesystem.
+The serverless equivalent of scheduler.py: it runs the same pipeline main() has
+always run, with two differences forced by a per-invocation filesystem.
 
   1. Working state is pulled from Blob before the run and pushed back after it,
      so run-to-run comparison keeps working (see storage.py).
-  2. It does not render index.html. api/render.js does that per request from
-     the published data.json, because a function cannot write into an immutable
-     deployment.
+  2. It does not render index.html: api/render.js does that per request from the
+     published data.json, since a function cannot write into a deployment.
 
-Idempotency: Vercel documents cron delivery as best effort — a scheduled run may
-be missed or occasionally delivered twice. This pipeline recomputes everything
-from current on-chain state rather than incrementing anything, so a duplicate
-run produces the same result as a single one.
+Idempotency: Vercel cron delivery is best effort, so a run may be missed or sent
+twice. The pipeline recomputes everything from on-chain state rather than
+incrementing anything, so a duplicate run gives the same result as a single one.
 """
 import json
 import os
 import sys
 import tempfile
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler
 
 # The function bundle has the project root as its working directory, so the
@@ -33,11 +29,9 @@ import storage  # noqa: E402
 
 def _authorized(headers) -> bool:
     """
-    Vercel sends CRON_SECRET as a bearer token on cron invocations.
-
-    Absent the secret this endpoint is world-callable, and each call burns a
-    full pipeline run against the RPC endpoints and the Graph API key. Fail
-    closed: an unset CRON_SECRET denies rather than allows.
+    Vercel sends CRON_SECRET as a bearer token on cron invocations. Without it
+    anyone could call this and burn a full pipeline run against the RPC endpoints
+    and the Graph API key, so an unset CRON_SECRET denies rather than allows.
     """
     secret = os.getenv("CRON_SECRET")
     if not secret:
@@ -47,7 +41,7 @@ def _authorized(headers) -> bool:
 
 def run() -> dict:
     """Run the pipeline in a scratch directory, round-tripping state via Blob."""
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
 
     # Every working-file path in generate_dashboard.py is relative to the
     # working directory, so moving the process into a writable scratch dir
@@ -62,12 +56,9 @@ def run() -> dict:
     original_cwd = os.getcwd()
     os.chdir(state_dir)
     try:
-        # Import *after* chdir, deliberately. database.py calls init_db() at
-        # module level, which opens reo.db relative to the working directory —
-        # so importing first would try to write into the read-only project root
-        # and, if it somehow succeeded, would hand the pipeline a fresh empty
-        # database instead of the one just pulled from Blob. The sys.path entry
-        # above is absolute, so the import resolves regardless of cwd.
+        # Import only after chdir: database.py opens reo.db relative to the
+        # working directory at import time, so importing earlier would use the
+        # read-only project root instead of the reo.db just pulled from Blob.
         import generate_dashboard  # noqa: E402, PLC0415
 
         os.environ["REO_OUTPUT_DIR"] = output_dir
@@ -88,7 +79,7 @@ def run() -> dict:
             data_path, "data.json", content_type="application/json", max_age=0
         )
 
-    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    elapsed = (datetime.now(UTC) - started).total_seconds()
     return {
         "ok": bool(ok) and published is not None,
         "generated": bool(ok),
