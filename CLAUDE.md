@@ -39,6 +39,17 @@ There is no fallback off Vercel. To undo a bad deploy, promote the previous
 deployment in the Vercel dashboard (Instant Rollback), or revert the commit
 and push.
 
+### Every deploy reinstalls the Python dependencies
+
+Vercel installs `requirements.txt` afresh on every deploy, docs-only commits
+included. On 2026-11-20 a docs commit redeployed with `vercel>=0.3.4`, which
+pulled in a release whose Blob module no longer had the functions `storage.py`
+called. Every hourly `/api/refresh` then crashed, and the page kept showing the
+last data it had, with nothing to say it was stale. The Blob SDK is now pinned
+exactly (`vercel-blob==0.6.2`); bump it on purpose, with
+`tests/unit/test_storage.py` passing, since that test runs `storage.py` through
+the real SDK.
+
 ### Verify visually, not with curl
 
 An HTTP 200 proves almost nothing here. Real incidents that all returned 200:
