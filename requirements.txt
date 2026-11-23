@@ -12,4 +12,8 @@ pycryptodome>=3.19.0
 # Vercel Blob, for round-tripping run-to-run state on a serverless host.
 # storage.py imports this lazily and only when BLOB_READ_WRITE_TOKEN is set, so
 # it is never loaded by the Docker image or a local run.
-vercel>=0.3.4
+# Pinned exactly because Vercel reinstalls dependencies on every deploy and this
+# SDK renames functions between minor releases: an open-ended range once let a
+# docs-only deploy stop the hourly refresh for days. Bump it with
+# tests/unit/test_storage.py passing.
+vercel-blob==0.6.2
