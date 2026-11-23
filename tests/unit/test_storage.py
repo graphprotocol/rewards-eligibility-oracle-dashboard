@@ -28,7 +28,7 @@ TOKEN = f"vercel_blob_rw_{STORE_ID}_secret"
 API_HOST = "vercel.com"
 DELIVERY_HOST = f"{STORE_ID}.public.blob.vercel-storage.com"
 
-# One file per state pattern, plus files that must never be stored.
+# 1 file per state pattern, plus files that must never be stored.
 STATE_FILES = {
     "reo.db": b"SQLite format 3\x00 binary payload \xff\xfe",
     "ens_resolution.json": b'{"0xabc": "indexer.eth"}',

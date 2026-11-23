@@ -8,7 +8,7 @@ blank slate and silently break everything that compares one run to the last
 from Blob before a run and pushed back after it.
 
 Everything keys off BLOB_READ_WRITE_TOKEN: without it, pull(), push() and
-publish() do nothing. Single writer by construction: one cron job writes this
+publish() do nothing. Single writer by construction: 1 cron job writes this
 state and there are no locks, so do not add a second writer without replacing
 this with something that has real atomicity.
 """

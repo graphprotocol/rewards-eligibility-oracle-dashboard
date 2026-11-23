@@ -1,7 +1,7 @@
 """Regenerates the dashboard data. Invoked hourly by Vercel Cron.
 
 The serverless equivalent of scheduler.py: it runs the same pipeline main() has
-always run, with two differences forced by a per-invocation filesystem.
+always run, with 2 differences forced by a per-invocation filesystem.
 
   1. Working state is pulled from Blob before the run and pushed back after it,
      so run-to-run comparison keeps working (see storage.py).
