@@ -1,33 +1,31 @@
-"""
-Round-trips the generator's working state between runs.
+"""Round-trips the generator's working state between runs through Vercel Blob.
 
-Locally this is a no-op. The JSON working files and reo.db sit in the repository
-root and persist because the directory does, so `python3 generate_dashboard.py`
-behaves exactly as it always has.
+Locally this is a no-op: the JSON working files and reo.db persist in the
+repository root, so `python3 generate_dashboard.py` behaves as it always has.
+On a serverless host the filesystem is per-invocation, so each run would see a
+blank slate and silently break everything that compares one run to the last
+(status changes, the activity log, streaks, the ENS cache). The files are pulled
+from Blob before a run and pushed back after it.
 
-On a serverless host the filesystem is per-invocation, which would silently
-break every feature that compares one run to the last: status-change detection,
-`last_status_change_date`, the cumulative activity log, streak calculation, and
-the ENS cache. Each run would see a blank slate and conclude nothing had ever
-changed. So the same files are pulled from Vercel Blob before a run and pushed
-back after it.
-
-Everything here keys off BLOB_READ_WRITE_TOKEN. Without it, pull() and push()
-do nothing at all — that absence is what keeps local development unchanged.
-
-Single-writer by construction: exactly one cron job ever writes this state, so
-there is no read-modify-write race to worry about. Do not add a second writer
-without replacing this with something that has real atomicity.
+Everything keys off BLOB_READ_WRITE_TOKEN: without it, pull(), push() and
+publish() do nothing. Single writer by construction: 1 cron job writes this
+state and there are no locks, so do not add a second writer without replacing
+this with something that has real atomicity.
 """
 from __future__ import annotations
 
 import fnmatch
 import os
-from typing import Iterable
+from collections.abc import Iterable
 
 # Blob pathname prefix. Keeps working state namespaced away from the published
 # assets (data.json, index.html) that live at the store root.
 STATE_PREFIX = "state/"
+
+# The store is public: api/render.js fetches data.json by its plain URL, with no
+# token. The Blob SDK needs the access level on every read and write, and it must
+# match the store's.
+ACCESS = "public"
 
 # Which files constitute run-to-run state. Globs, because the per-environment
 # files are named after whichever networks are configured.
@@ -57,28 +55,22 @@ def pull(state_dir: str) -> int:
     if not is_enabled():
         return 0
 
-    from vercel.blob import download_file, list_objects
+    from vercel.blob.sync import get_blob, query_blobs
 
     os.makedirs(state_dir, exist_ok=True)
     restored = 0
 
-    cursor = None
-    while True:
-        page = list_objects(prefix=STATE_PREFIX, cursor=cursor)
-        blobs = page.get("blobs", []) if isinstance(page, dict) else page.blobs
-        for blob in blobs:
-            pathname = blob["pathname"] if isinstance(blob, dict) else blob.pathname
-            url = blob["url"] if isinstance(blob, dict) else blob.url
-            name = pathname[len(STATE_PREFIX):]
-            if not name or not _matches_state(name):
-                continue
-            download_file(url, os.path.join(state_dir, name), overwrite=True)
-            restored += 1
-
-        has_more = page.get("hasMore", False) if isinstance(page, dict) else page.has_more
-        cursor = page.get("cursor") if isinstance(page, dict) else getattr(page, "cursor", None)
-        if not has_more or not cursor:
-            break
+    # query_blobs follows the listing from page to page itself.
+    for blob in query_blobs(prefix=STATE_PREFIX):
+        name = blob.pathname[len(STATE_PREFIX):]
+        # State files sit directly under the prefix; fnmatch's "*" also matches
+        # "/", so without this a nested name could match and fail to write.
+        if not name or "/" in name or not _matches_state(name):
+            continue
+        result = get_blob(blob.url, access=ACCESS)
+        with open(os.path.join(state_dir, name), "wb") as f:
+            f.write(result.body)
+        restored += 1
 
     print(f"✓ Restored {restored} state file(s) from Blob")
     return restored
@@ -92,16 +84,24 @@ def push(state_dir: str) -> int:
     if not is_enabled():
         return 0
 
-    from vercel.blob import upload_file
+    from vercel.blob.sync import put_blob
 
     stored = 0
     for name in sorted(os.listdir(state_dir)):
         path = os.path.join(state_dir, name)
         if not os.path.isfile(path) or not _matches_state(name):
             continue
+        with open(path, "rb") as f:
+            body = f.read()
         # Working state is never fetched by a browser, so it must not sit in a
         # CDN cache that would hand a stale copy back to the next run.
-        upload_file(path, f"{STATE_PREFIX}{name}", overwrite=True, cache_control_max_age=0)
+        put_blob(
+            f"{STATE_PREFIX}{name}",
+            body,
+            access=ACCESS,
+            allow_overwrite=True,
+            cache_control_max_age=0,
+        )
         stored += 1
 
     print(f"✓ Stored {stored} state file(s) to Blob")
@@ -118,16 +118,19 @@ def publish(local_path: str, blob_path: str, *, content_type: str, max_age: int)
     if not is_enabled():
         return None
 
-    from vercel.blob import upload_file
+    from vercel.blob.sync import put_blob
 
-    result = upload_file(
-        local_path,
+    with open(local_path, "rb") as f:
+        body = f.read()
+    result = put_blob(
         blob_path,
-        overwrite=True,
+        body,
+        access=ACCESS,
         content_type=content_type,
+        allow_overwrite=True,
         cache_control_max_age=max_age,
     )
-    url = result["url"] if isinstance(result, dict) else result.url
+    url = result.url
     print(f"✓ Published {blob_path} → {url}")
     return url
 
