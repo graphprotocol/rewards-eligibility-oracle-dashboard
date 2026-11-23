@@ -63,7 +63,9 @@ def pull(state_dir: str) -> int:
     # query_blobs follows the listing from page to page itself.
     for blob in query_blobs(prefix=STATE_PREFIX):
         name = blob.pathname[len(STATE_PREFIX):]
-        if not name or not _matches_state(name):
+        # State files sit directly under the prefix; fnmatch's "*" also matches
+        # "/", so without this a nested name could match and fail to write.
+        if not name or "/" in name or not _matches_state(name):
             continue
         result = get_blob(blob.url, access=ACCESS)
         with open(os.path.join(state_dir, name), "wb") as f:

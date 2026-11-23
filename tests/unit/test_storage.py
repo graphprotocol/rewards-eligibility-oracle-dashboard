@@ -205,6 +205,15 @@ class TestPushAndPull:
         assert storage.pull(str(tmp_path / "run")) == 1
         assert read_files(tmp_path / "run") == {"reo.db": b"db"}
 
+    def test_pull_skips_names_that_point_into_a_subfolder(self, blob, tmp_path):
+        # The state patterns' "*" also matches "/", so this name would match
+        # active_indexers_*.json and be written to a folder that does not exist.
+        blob.put_object("state/active_indexers_x/y.json", b"[]")
+        blob.put_object("state/reo.db", b"db")
+
+        assert storage.pull(str(tmp_path / "run")) == 1
+        assert read_files(tmp_path / "run") == {"reo.db": b"db"}
+
     def test_pull_follows_every_page_of_the_listing(self, blob, tmp_path):
         blob.page_size = 1
         for name, body in STATE_FILES.items():
