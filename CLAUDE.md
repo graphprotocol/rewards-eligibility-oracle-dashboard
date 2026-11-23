@@ -116,7 +116,7 @@ error anywhere the reader will see. It looks like a working page.
 
 ### Environment Setup
 ```bash
-# Install dependencies
+# Install dependencies (Python 3.11 or newer, which the Vercel Blob SDK needs)
 pip3 install -r requirements.txt
 
 # Create environment file from template
